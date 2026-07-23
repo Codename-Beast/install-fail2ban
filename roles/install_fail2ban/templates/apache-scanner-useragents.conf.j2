@@ -1,10 +1,10 @@
 [Definition]
-# Verwaltet durch Ansible-Rolle install_fail2ban.
+# Managed by Ansible role install_fail2ban.
 #
-# Dieser Filter sperrt nur explizit benannte Security-/Enumeration-Tools.
-# Generische Clients wie curl, wget, python-requests oder Go-http-client sind
-# bewusst nicht enthalten, weil sie auch für Monitoring, APIs und Administration
-# legitim verwendet werden.
+# This filter bans only explicitly named security/enumeration tools.
+# Generic clients such as curl, wget, python-requests, or Go-http-client are
+# not included because they may be used legitimately for monitoring, APIs,
+# and administration.
 
 {% set _scanner_agents = (install_fail2ban_scanner_useragents | default([])) + (install_fail2ban_scanner_useragents_extra | default([])) %}
 {% set _scanner_ignore_agents = install_fail2ban_scanner_useragents_ignore | default([]) %}

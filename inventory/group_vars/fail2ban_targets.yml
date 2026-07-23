@@ -1,0 +1,6 @@
+---
+# Set the shared VPN or jump-host source IP here before enabling the sshd jail.
+install_fail2ban_trusted_ips: []
+
+# Optional additional trusted networks, for example monitoring.
+install_fail2ban_allowed_ips: []

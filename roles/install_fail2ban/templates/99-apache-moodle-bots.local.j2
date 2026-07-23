@@ -1,17 +1,14 @@
-# Verwaltet durch Ansible-Rolle install_fail2ban.
+# Managed by Ansible role install_fail2ban.
 #
-# Wichtig:
-# - Kein globaler [DEFAULT]-Abschnitt: diese Datei soll fremde SSH-/Service-Jails
-#   nicht nebenbei verändern.
-# - ignoreip wird zentral aus Basiswerten, expliziter Whitelist und optional
-#   importierten nftables-Sets gebaut.
+# Notes:
+# - No global [DEFAULT] section: this file must not change unrelated SSH/service jails.
+# - ignoreip is built from base values, explicit allowlists, and optional imported nftables sets.
 
 {% set ignoreip = install_fail2ban_effective_ignoreip | default(install_fail2ban_ignoreip | default(install_fail2ban_base_ignoreip)) | unique | list | join(' ') %}
 
 # -----------------------------------------------------------------------------
-# SSH-Bruteforce-Schutz.
-# Konservativ halten: ein SSH-Lockout ist betrieblich deutlich schlimmer als ein
-# temporär nicht gesperrter Fehlversuch.
+# SSH brute-force protection.
+# Keep this conservative: an SSH lockout is operationally worse than a temporary missed ban.
 # -----------------------------------------------------------------------------
 [sshd]
 enabled = {{ install_fail2ban_sshd_enabled | ternary('true', 'false') }}
@@ -33,8 +30,8 @@ bantime.maxtime = {{ install_fail2ban_sshd_bantime_maxtime }}
 bantime.rndtime = {{ install_fail2ban_sshd_bantime_rndtime }}
 
 # -----------------------------------------------------------------------------
-# Eindeutig bösartige Pfade: Fremdsysteme, Secrets, Webshells, bekannte Exploits.
-# Ein Treffer reicht für einen permanenten Ban auf HTTP/HTTPS.
+# High-confidence malicious paths: foreign apps, secrets, web shells, known exploits.
+# One match is enough for a permanent HTTP/HTTPS ban.
 # -----------------------------------------------------------------------------
 [apache-malicious-paths]
 enabled = {{ install_fail2ban_malicious_paths_enabled | ternary('true', 'false') }}
@@ -55,8 +52,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Explizit benannte Scanner im User-Agent.
-# Die Liste kommt aus defaults/main.yml und kann pro Host erweitert werden.
+# Explicitly named scanners in the User-Agent.
+# The list comes from defaults/main.yml and can be extended per host.
 # -----------------------------------------------------------------------------
 [apache-scanner-useragents]
 enabled = {{ install_fail2ban_scanner_useragents_enabled | ternary('true', 'false') }}
@@ -77,9 +74,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Breite Pfadscans über viele 400/403/404/405/408/414 Antworten.
-# Dieser Jail ist absichtlich nicht sofort permanent, weil NAT-/Campus-IP-Adressen
-# viele legitime Benutzer repräsentieren können.
+# Wide path scans across many 400/403/404/405/408/414 responses.
+# This jail is not immediately permanent because NAT/campus IPs may represent many valid users.
 # -----------------------------------------------------------------------------
 [apache-scanburst]
 enabled = {{ install_fail2ban_scanburst_enabled | ternary('true', 'false') }}
@@ -103,7 +99,7 @@ bantime.rndtime = {{ install_fail2ban_scanburst_rndtime }}
 bantime.overalljails = {{ install_fail2ban_scanburst_overalljails | ternary('true', 'false') }}
 
 # -----------------------------------------------------------------------------
-# Eingebauter Apache-Overflow-Filter.
+# Built-in Apache overflow filter.
 # -----------------------------------------------------------------------------
 [apache-overflows]
 enabled = {{ install_fail2ban_overflows_enabled | ternary('true', 'false') }}
@@ -124,7 +120,7 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Eingebauter Shellshock-Filter. Shellshock-Probes sind hochgradig eindeutig.
+# Built-in Shellshock filter. Shellshock probes are high-confidence signals.
 # -----------------------------------------------------------------------------
 [apache-shellshock]
 enabled = {{ install_fail2ban_shellshock_enabled | ternary('true', 'false') }}
@@ -145,8 +141,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Optional: Apache Basic/Digest Auth. Das ist NICHT der Moodle-Formularlogin.
-# Nur aktivieren, wenn Apache-Auth wirklich genutzt wird.
+# Optional: Apache Basic/Digest Auth. This is not the Moodle form login.
+# Enable only when Apache Auth is actually used.
 # -----------------------------------------------------------------------------
 [apache-auth]
 enabled = {{ install_fail2ban_apache_auth_enabled | ternary('true', 'false') }}
@@ -165,9 +161,9 @@ findtime = {{ install_fail2ban_apache_auth_findtime }}
 bantime = {{ install_fail2ban_apache_auth_bantime }}
 
 # -----------------------------------------------------------------------------
-# Optional: eingebaute Apache-Bot-Hilfsfilter.
-# Default bleibt false, weil sie je nach Logformat/Anwendung False Positives
-# erzeugen oder sich mit den eigenen Filtern überschneiden können.
+# Optional: built-in Apache bot helper filters.
+# Default stays false because log formats/apps may cause false positives
+# or overlap with the custom filters.
 # -----------------------------------------------------------------------------
 [apache-badbots]
 enabled = {{ install_fail2ban_apache_badbots_enabled | ternary('true', 'false') }}
@@ -202,8 +198,8 @@ findtime = {{ install_fail2ban_apache_botsearch_findtime }}
 bantime = {{ install_fail2ban_apache_botsearch_bantime }}
 
 # -----------------------------------------------------------------------------
-# Wiederholungstäter: wer innerhalb des Fensters mehrfach von anderen Jails
-# gebannt wurde, wird dauerhaft auf allen Ports gesperrt.
+# Repeat offenders: sources banned multiple times by other jails within the window
+# are blocked permanently on all ports.
 # -----------------------------------------------------------------------------
 [recidive]
 enabled = {{ install_fail2ban_recidive_enabled | ternary('true', 'false') }}

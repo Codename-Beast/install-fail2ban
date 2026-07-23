@@ -1,11 +1,11 @@
 ---
-# Die Reihenfolge ist sicherheitsrelevant:
-# 1. Reiner Report-Modus darf vor Preflight enden.
-# 2. Voraussetzungen prüfen.
-# 3. Fail2Ban installieren.
-# 4. verwaltete Dateien schreiben.
-# 5. Konfiguration testen.
-# 6. erst danach Dienst starten/aktivieren/restarten.
+# Order matters:
+# 1. Read-only report mode may stop before preflight.
+# 2. Validate prerequisites.
+# 3. Install Fail2Ban.
+# 4. Write managed files.
+# 5. Test the configuration.
+# 6. Start, enable, or restart services only after validation.
 
 - name: "Report | read Fail2Ban status"
   command:
@@ -44,20 +44,20 @@
       - ansible_os_family == 'Debian'
       - ansible_distribution in ['Debian', 'Ubuntu']
     fail_msg: >-
-      install_fail2ban unterstützt Debian/Ubuntu. Erkannt wurde:
+      install_fail2ban supports Debian/Ubuntu only. Detected:
       {{ ansible_distribution }} {{ ansible_distribution_version }}
-    success_msg: "Unterstütztes System erkannt: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+    success_msg: "Supported system detected: {{ ansible_distribution }} {{ ansible_distribution_version }}"
 
 - name: "Preflight | check Ansible version"
   assert:
     that: "ansible_version.full is version('2.10', '>=')"
-    fail_msg: "install_fail2ban benötigt Ansible >= 2.10 (gefunden: {{ ansible_version.full }})"
+    fail_msg: "install_fail2ban requires Ansible >= 2.10 (found: {{ ansible_version.full }})"
 
 - name: "Preflight | check explicit whitelist"
   assert:
     that:
       - item is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
-    fail_msg: "install_fail2ban: ungültiger Whitelist-Eintrag '{{ item }}'. Bitte IP oder CIDR nutzen."
+    fail_msg: "install_fail2ban: invalid whitelist entry '{{ item }}'. Use IP or CIDR notation."
   loop: "{{ (install_fail2ban_ignoreip | default([])) + (install_fail2ban_trusted_ips | default([])) + (install_fail2ban_allowed_ips | default([])) }}"
   when: install_fail2ban_ip_whitelist_enabled | bool
 
@@ -66,8 +66,8 @@
     that:
       - (install_fail2ban_trusted_ips | default([])) | length > 0
     fail_msg: >-
-      install_fail2ban: sshd ist aktiv, aber install_fail2ban_trusted_ips ist leer.
-      Trage die gemeinsame VPN- oder Jump-Host-IP ein, damit berechtigte SSH-Key-Logins nicht ausgesperrt werden.
+      install_fail2ban: sshd is enabled but install_fail2ban_trusted_ips is empty.
+      Add the shared VPN or jump-host IP so trusted SSH key logins cannot be locked out.
   when:
     - install_fail2ban_sshd_enabled | bool
     - install_fail2ban_require_trusted_whitelist_for_sshd | bool
@@ -85,8 +85,8 @@
 - name: "Preflight | require nftables"
   fail:
     msg: >-
-      Abbruch: nftables/nft ist auf dem Zielserver nicht vorhanden. Die Rolle installiert nftables bewusst nicht automatisch.
-      Bitte nftables vorbereiten und erneut starten.
+      Abort: nftables/nft is missing on the target host. This role does not install nftables automatically.
+      Prepare nftables and run the role again.
   when:
     - install_fail2ban_require_nftables | bool
     - not (install_fail2ban_nft_command_stats.results | selectattr('stat.exists') | list | length > 0)
@@ -99,53 +99,69 @@
 - name: "Preflight | require Apache log dir"
   fail:
     msg: >-
-      Abbruch: {{ install_fail2ban_apache_log_dir }} fehlt. Die Standardkonfiguration erwartet
-      dateibasierte Apache-Logs. Setze install_fail2ban_require_apache_log_dir: false nur bewusst.
+      Abort: {{ install_fail2ban_apache_log_dir }} is missing. The default configuration expects
+      file-based Apache logs. Set install_fail2ban_require_apache_log_dir: false only intentionally.
   when:
     - install_fail2ban_require_apache_log_dir | bool
     - not install_fail2ban_apache_log_dir_stat.stat.exists
 
-- name: "Preflight | import nft whitelist sets"
-  shell: |
-    set -euo pipefail
-    python3 - <<'PY'
-    import json
-    import re
-    import subprocess
-
-    erlaubte_sets = set({{ install_fail2ban_nft_whitelist_set_names | to_json }})
-    ip_muster = re.compile(r'^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
-
-    daten = json.loads(subprocess.check_output(['nft', '-j', 'list', 'ruleset'], text=True))
-    ergebnis = []
-
-    def add_wert(wert):
-        if isinstance(wert, str) and ip_muster.match(wert) and wert not in ergebnis:
-            ergebnis.append(wert)
-        elif isinstance(wert, dict) and 'prefix' in wert:
-            prefix = wert['prefix']
-            addr = prefix.get('addr')
-            laenge = prefix.get('len')
-            if addr is not None and laenge is not None:
-                cidr = f'{addr}/{laenge}'
-                if ip_muster.match(cidr) and cidr not in ergebnis:
-                    ergebnis.append(cidr)
-
-    for eintrag in daten.get('nftables', []):
-        set_def = eintrag.get('set')
-        if not set_def or set_def.get('name') not in erlaubte_sets:
-            continue
-        for element in set_def.get('elem', []) or []:
-            add_wert(element)
-
-    for wert in ergebnis:
-        print(wert)
-    PY
-  args:
-    executable: /bin/bash
-  register: install_fail2ban_nft_whitelist_import
+- name: "Preflight | read nft ruleset"
+  command:
+    cmd: nft -j list ruleset
+  register: install_fail2ban_nft_ruleset_command
   changed_when: false
   when: install_fail2ban_nft_whitelist_import_enabled | bool
+
+- name: "Preflight | select nft whitelist sets"
+  set_fact:
+    install_fail2ban_nft_whitelist_sets: >-
+      {{
+        ((install_fail2ban_nft_ruleset_command.stdout | from_json).nftables | default([]))
+        | selectattr('set', 'defined')
+        | map(attribute='set')
+        | selectattr('name', 'in', install_fail2ban_nft_whitelist_set_names)
+        | list
+      }}
+  when: install_fail2ban_nft_whitelist_import_enabled | bool
+
+- name: "Preflight | initialize nft whitelist import"
+  set_fact:
+    install_fail2ban_nft_whitelist_import_lines: []
+  when: install_fail2ban_nft_whitelist_import_enabled | bool
+
+- name: "Preflight | import nft string elements"
+  set_fact:
+    install_fail2ban_nft_whitelist_import_lines: >-
+      {{ (install_fail2ban_nft_whitelist_import_lines + [item.1]) | unique | list }}
+  loop: "{{ install_fail2ban_nft_whitelist_sets | subelements('elem', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ item.1 }}"
+  when:
+    - install_fail2ban_nft_whitelist_import_enabled | bool
+    - item.1 is string
+    - item.1 is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
+
+- name: "Preflight | import nft prefix elements"
+  set_fact:
+    install_fail2ban_nft_whitelist_import_lines: >-
+      {{ (install_fail2ban_nft_whitelist_import_lines + [install_fail2ban_nft_prefix_cidr]) | unique | list }}
+  loop: "{{ install_fail2ban_nft_whitelist_sets | subelements('elem', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ install_fail2ban_nft_prefix_cidr | default('skip') }}"
+  vars:
+    install_fail2ban_nft_prefix_cidr: >-
+      {{
+        ((item.1.prefix.addr | string) ~ '/' ~ (item.1.prefix.len | string))
+        if (item.1 is mapping and item.1.prefix is defined and item.1.prefix.addr is defined and item.1.prefix.len is defined)
+        else ''
+      }}
+  when:
+    - install_fail2ban_nft_whitelist_import_enabled | bool
+    - item.1 is mapping
+    - item.1.prefix is defined
+    - item.1.prefix.addr is defined
+    - item.1.prefix.len is defined
+    - install_fail2ban_nft_prefix_cidr is match('^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^[0-9A-Fa-f:]+/[0-9]{1,3}$')
 
 - name: "Preflight | build effective whitelist"
   set_fact:
@@ -155,7 +171,7 @@
           (install_fail2ban_ignoreip | default(install_fail2ban_base_ignoreip))
           + ((install_fail2ban_trusted_ips | default([])) if (install_fail2ban_ip_whitelist_enabled | bool) else [])
           + ((install_fail2ban_allowed_ips | default([])) if (install_fail2ban_ip_whitelist_enabled | bool) else [])
-          + (install_fail2ban_nft_whitelist_import.stdout_lines | default([]))
+          + (install_fail2ban_nft_whitelist_import_lines | default([]))
         ) | unique | list
       }}
 
@@ -163,7 +179,7 @@
   assert:
     that:
       - item is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
-    fail_msg: "install_fail2ban: ungültiger finaler Whitelist-Eintrag '{{ item }}'."
+    fail_msg: "install_fail2ban: invalid final whitelist entry '{{ item }}'."
   loop: "{{ install_fail2ban_effective_ignoreip }}"
 
 - name: "Report | read status before changes"
@@ -237,9 +253,9 @@
     group: root
     mode: "0600"
     content: |
-      Initiales Fail2Ban-Backup durch Rolle install_fail2ban.
+      Initial Fail2Ban backup by role install_fail2ban.
       Host: {{ inventory_hostname }}
-      Zeitpunkt: {{ ansible_date_time.iso8601 }}
+      Timestamp: {{ ansible_date_time.iso8601 }}
   when:
     - install_fail2ban_backup_existing_config | bool
     - install_fail2ban_etc_stat.stat.exists
@@ -277,8 +293,8 @@
     that:
       - (not (item.item.enabled | bool)) or item.stat.exists
     fail_msg: >-
-      Der aktivierte Fail2Ban-Filter '{{ item.item.name }}' fehlt auf dem Zielsystem
-      (/etc/fail2ban/filter.d/{{ item.item.name }}.conf). Jail deaktivieren oder Fail2Ban-Paket prüfen.
+      Enabled Fail2Ban filter '{{ item.item.name }}' is missing on the target host
+      (/etc/fail2ban/filter.d/{{ item.item.name }}.conf). Disable the jail or check the Fail2Ban package.
   loop: "{{ install_fail2ban_builtin_filter_stats.results }}"
   loop_control:
     label: "{{ item.item.name }}"
@@ -447,8 +463,8 @@
   assert:
     that:
       - "'f2b_up' in install_fail2ban_exporter_metrics.content"
-    fail_msg: "install_fail2ban: Fail2Ban exporter liefert keine f2b_up Metrik"
-    success_msg: "Fail2Ban exporter liefert Metriken."
+    fail_msg: "install_fail2ban: Fail2Ban exporter does not expose the f2b_up metric"
+    success_msg: "Fail2Ban exporter exposes metrics."
   when: install_fail2ban_exporter_enabled | bool
 
 
@@ -459,8 +475,8 @@
   assert:
     that:
       - ansible_facts.services['fail2ban.service'].state == 'running'
-    fail_msg: "Fail2Ban läuft nach der Aktivierung nicht."
-    success_msg: "Fail2Ban läuft."
+    fail_msg: "Fail2Ban is not running after activation."
+    success_msg: "Fail2Ban is running."
 
 - name: "Verify | list loaded jails"
   command:
