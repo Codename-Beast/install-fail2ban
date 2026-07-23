@@ -25,6 +25,9 @@ Ausführen:
 ansible-playbook -i inventory install_fail2ban.yml
 ```
 
+Nutze die vorhandene zentrale Ansible-Konfiguration der Umgebung.
+
+
 Anderen Host oder Gruppe wählen:
 
 ```bash
@@ -61,12 +64,12 @@ ansible-playbook -i inventory install_fail2ban.yml --check --diff
 | Thema | Erwartung |
 |---|---|
 | OS | Debian/Ubuntu |
-| Ansible | >= 2.10 |
+| Ansible | ansible-core >= 2.12.10 |
 | Firewall | nftables muss vorhanden sein |
 | Logs | Apache-Dateilogs unter `/var/log/apache2` |
 | SSH-Logs | nur systemd-journal |
 
-`nftables` wird nicht automatisch installiert. Wenn `nft` fehlt, beendet die Rolle den Lauf vor Änderungen.
+`nftables` wird nicht automatisch installiert. Wenn `nft` fehlt, beendet die Rolle den Lauf vor Änderungen. Der optionale nftables-Whitelist-Import nutzt `nft -j list ruleset` und Ansible-Filter, keinen Inline-Python-Code.
 
 SSH wird nur über systemd-journal ausgewertet. Es gibt keinen Datei-Log-Fallback.
 
@@ -298,7 +301,6 @@ sudo systemctl restart fail2ban
 
 ## Lokal geprüfte Versionen
 
-- ansible-base / Ansible 2.10.12
 - ansible-core 2.12.10
 - ansible-core 2.21.2
 - ansible-lint mit ansible-core 2.21.2

@@ -50,8 +50,8 @@
 
 - name: "Preflight | check Ansible version"
   assert:
-    that: "ansible_version.full is version('2.10', '>=')"
-    fail_msg: "install_fail2ban requires Ansible >= 2.10 (found: {{ ansible_version.full }})"
+    that: "ansible_version.full is version('2.12.10', '>=')"
+    fail_msg: "install_fail2ban requires ansible-core >= 2.12.10 (found: {{ ansible_version.full }})"
 
 - name: "Preflight | check explicit whitelist"
   assert:
