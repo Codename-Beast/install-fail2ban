@@ -1,6 +1,6 @@
 ---
 - name: Install Fail2Ban protection
-  hosts: "{{ install_fail2ban_hosts | default('fail2ban_targets') }}"
+  hosts: "{{ hosts | default(install_fail2ban_hosts | default('fail2ban_targets')) }}"
   become: true
   gather_facts: true
   roles:

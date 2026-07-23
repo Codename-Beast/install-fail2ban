@@ -39,8 +39,34 @@ ansible-playbook -i . install_fail2ban.yml
 Anderen Host oder Gruppe wählen:
 
 ```bash
-ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_hosts=web01
-ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_hosts=fail2ban_targets
+ansible-playbook install_fail2ban.yml -i inventory/hosts -e hosts=web01
+ansible-playbook install_fail2ban.yml -i inventory/hosts -e hosts=fail2ban_targets
+```
+
+Mehrere Hosts oder Gruppen gehen als Ansible-Pattern:
+
+```bash
+ansible-playbook install_fail2ban.yml -i inventory/hosts -e 'hosts=web01:web02'
+ansible-playbook install_fail2ban.yml -i inventory/hosts -e 'hosts=web01,web02'
+ansible-playbook install_fail2ban.yml -i hc-moodle -e 'hosts=moodle_web:&debian'
+```
+
+Zusatzargumente kommen einfach als weitere Extra-Vars dazu:
+
+```bash
+ansible-playbook install_fail2ban.yml -i inventory/hosts \
+  -e hosts=hc-testmaschine \
+  -e install_fail2ban_report_only=true
+
+ansible-playbook install_fail2ban.yml -i prod \
+  -e 'hosts=web01:web02' \
+  -e install_fail2ban_exporter_enabled=true
+```
+
+Alternativ bleibt auch der nicht reservierte Variablenname möglich:
+
+```bash
+ansible-playbook install_fail2ban.yml -i inventory/hosts -e install_fail2ban_hosts=web01
 ```
 
 Vorher prüfen:
