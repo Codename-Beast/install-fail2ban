@@ -52,7 +52,7 @@ ansible-playbook -i inventory install_fail2ban.yml --check --diff
 - legt ein einmaliges Backup von `/etc/fail2ban` an
 - installiert eigene Filter für Apache/Moodle-Scans
 - rendert SSH-, Apache- und Recidive-Jails
-- prüft alles mit `fail2ban-client -t`
+- prüft die Fail2Ban-Konfiguration mit `fail2ban-client -t`
 - startet/aktiviert Fail2Ban erst nach erfolgreicher Prüfung
 - startet Fail2Ban nur neu, wenn verwaltete Konfiguration geändert wurde
 - kann optional den Fail2Ban Prometheus Exporter installieren
@@ -266,7 +266,7 @@ Die Rolle kann mehrfach laufen:
 - das initiale Backup wird nur einmal erstellt
 - `fail2ban-client -t` läuft vor Start/Restart
 - Restart passiert nur bei geänderter verwalteter Konfiguration
-- Test-Bans werden wieder entfernt und zählen nicht als Änderung
+- ein optionaler nft-Test-Ban ist möglich, aber standardmäßig aus
 
 ---
 
@@ -303,4 +303,4 @@ sudo systemctl restart fail2ban
 
 - ansible-core 2.12.10
 - ansible-core 2.21.2
-- ansible-lint mit ansible-core 2.21.2
+- ansible-lint mit ansible-core 2.21.2 im Profil `shared`

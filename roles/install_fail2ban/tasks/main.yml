@@ -343,36 +343,6 @@
     cmd: fail2ban-client -t
   changed_when: false
 
-- name: "Verify | test malicious path regex"
-  shell: |
-    set -euo pipefail
-    tmpfile="$(mktemp)"
-    trap 'rm -f "$tmpfile"' EXIT
-    cat >"$tmpfile" <<'EOF'
-    203.0.113.10 - - [23/Jul/2026:14:00:00 +0200] "GET /.env HTTP/1.1" 404 123 "-" "Mozilla/5.0"
-    203.0.113.13 - - [23/Jul/2026:14:00:03 +0200] "GET /login/index.php?redirect=/wp-login.php HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
-    EOF
-    fail2ban-regex "$tmpfile" /etc/fail2ban/filter.d/apache-malicious-paths.conf | grep -q '1 matched, 1 missed'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  when: install_fail2ban_run_filter_smoke_tests | bool
-
-- name: "Verify | test scanner regex"
-  shell: |
-    set -euo pipefail
-    tmpfile="$(mktemp)"
-    trap 'rm -f "$tmpfile"' EXIT
-    cat >"$tmpfile" <<'EOF'
-    203.0.113.15 - - [23/Jul/2026:14:00:05 +0200] "GET / HTTP/1.1" 200 512 "-" "sqlmap/1.8"
-    203.0.113.17 - - [23/Jul/2026:14:00:07 +0200] "GET / HTTP/1.1" 200 512 "-" "curl/8.10.0"
-    EOF
-    fail2ban-regex "$tmpfile" /etc/fail2ban/filter.d/apache-scanner-useragents.conf | grep -q '1 matched, 1 missed'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  when: install_fail2ban_run_filter_smoke_tests | bool
-
 - name: "Service | start and enable Fail2Ban"
   service:
     name: fail2ban

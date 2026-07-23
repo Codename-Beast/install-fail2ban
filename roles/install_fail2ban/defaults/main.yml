@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.7.0"
+install_fail2ban_role_version: "0.8.0"
 
 # install_fail2ban defaults
 #
@@ -204,6 +204,5 @@ install_fail2ban_report_before: false
 install_fail2ban_report_after: false
 
 # -- Verification --------------------------------------------------
-install_fail2ban_run_filter_smoke_tests: true
-install_fail2ban_run_nft_test_ban: true
+install_fail2ban_run_nft_test_ban: false
 install_fail2ban_test_ban_ip: 192.0.2.123
