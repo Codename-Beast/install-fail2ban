@@ -1,0 +1,114 @@
+# Managed by Ansible role install_fail2ban.
+# No [DEFAULT] section is used here, so existing SSH or service jails are not changed globally.
+
+{% set ignoreip = install_fail2ban_ignoreip | join(' ') %}
+
+[apache-malicious-paths]
+enabled = {{ install_fail2ban_malicious_paths_enabled | ternary('true', 'false') }}
+filter = apache-malicious-paths
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ install_fail2ban_access_log }}
+maxretry = 1
+findtime = 1d
+bantime = -1
+bantime.increment = false
+bantime.rndtime = 0
+
+[apache-scanner-useragents]
+enabled = {{ install_fail2ban_scanner_useragents_enabled | ternary('true', 'false') }}
+filter = apache-scanner-useragents
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ install_fail2ban_access_log }}
+maxretry = 1
+findtime = 1d
+bantime = -1
+bantime.increment = false
+bantime.rndtime = 0
+
+[apache-scanburst]
+enabled = {{ install_fail2ban_scanburst_enabled | ternary('true', 'false') }}
+filter = apache-scanburst
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ install_fail2ban_access_log }}
+maxretry = {{ install_fail2ban_scanburst_maxretry }}
+findtime = {{ install_fail2ban_scanburst_findtime }}
+bantime = {{ install_fail2ban_scanburst_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ install_fail2ban_scanburst_multipliers }}
+bantime.maxtime = {{ install_fail2ban_scanburst_maxtime }}
+bantime.rndtime = 10m
+bantime.overalljails = false
+
+[apache-overflows]
+enabled = {{ install_fail2ban_overflows_enabled | ternary('true', 'false') }}
+filter = apache-overflows
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ install_fail2ban_error_log }}
+maxretry = 2
+findtime = 1d
+bantime = -1
+bantime.increment = false
+bantime.rndtime = 0
+
+[apache-shellshock]
+enabled = {{ install_fail2ban_shellshock_enabled | ternary('true', 'false') }}
+filter = apache-shellshock
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ install_fail2ban_error_log }}
+maxretry = 1
+findtime = 1d
+bantime = -1
+bantime.increment = false
+bantime.rndtime = 0
+
+[recidive]
+enabled = {{ install_fail2ban_recidive_enabled | ternary('true', 'false') }}
+filter = recidive
+logpath = /var/log/fail2ban.log
+protocol = tcp,udp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_backend }}
+banaction = {{ install_fail2ban_banaction_allports }}
+action = %(action_)s
+maxretry = {{ install_fail2ban_recidive_maxretry }}
+findtime = {{ install_fail2ban_recidive_findtime }}
+bantime = {{ install_fail2ban_recidive_bantime }}
+bantime.increment = false
+bantime.rndtime = 0

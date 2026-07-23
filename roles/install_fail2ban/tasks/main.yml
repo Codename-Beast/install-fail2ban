@@ -1,0 +1,203 @@
+---
+- name: Assert supported OS family
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+    fail_msg: "install_fail2ban supports Debian/Ubuntu only. Detected: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+    success_msg: "Supported OS detected: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+- name: Check known nft command locations
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/sbin/nft
+    - /usr/bin/nft
+    - /sbin/nft
+    - /bin/nft
+  register: install_fail2ban_nft_command_stats
+
+- name: Abort when nftables is not already present
+  ansible.builtin.fail:
+    msg: >-
+      Abbruch: nftables/nft ist auf dem Zielserver nicht vorhanden. Die Rolle installiert nftables bewusst nicht automatisch.
+      Bitte nftables vorbereiten und erneut starten.
+  when:
+    - install_fail2ban_require_nftables | bool
+    - not (install_fail2ban_nft_command_stats.results | selectattr('stat.exists') | list | length > 0)
+
+- name: Check Apache log directory
+  ansible.builtin.stat:
+    path: "{{ install_fail2ban_apache_log_dir }}"
+  register: install_fail2ban_apache_log_dir_stat
+
+- name: Abort when Apache log directory is missing
+  ansible.builtin.fail:
+    msg: "Abbruch: {{ install_fail2ban_apache_log_dir }} fehlt. Die Standardkonfiguration erwartet dateibasierte Apache-Logs."
+  when:
+    - install_fail2ban_require_apache_log_dir | bool
+    - not install_fail2ban_apache_log_dir_stat.stat.exists
+
+- name: Install Fail2Ban package
+  ansible.builtin.apt:
+    name: "{{ install_fail2ban_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Fail2Ban backup directory exists
+  ansible.builtin.file:
+    path: "{{ install_fail2ban_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: install_fail2ban_backup_existing_config | bool
+
+- name: Check existing Fail2Ban config directory
+  ansible.builtin.stat:
+    path: /etc/fail2ban
+  register: install_fail2ban_etc_stat
+
+- name: Create backup of existing Fail2Ban configuration
+  ansible.builtin.command:
+    cmd: "tar --create --gzip --file={{ install_fail2ban_backup_dir }}/fail2ban-{{ ansible_date_time.iso8601_basic_short }}.tar.gz /etc/fail2ban"
+  changed_when: true
+  # noqa: command-instead-of-module
+  when:
+    - install_fail2ban_backup_existing_config | bool
+    - install_fail2ban_etc_stat.stat.exists
+
+- name: Ensure Fail2Ban configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/fail2ban/fail2ban.d
+    - /etc/fail2ban/filter.d
+    - /etc/fail2ban/jail.d
+
+- name: Install Fail2Ban daemon web protection configuration
+  ansible.builtin.copy:
+    src: 99-web-protection.local
+    dest: /etc/fail2ban/fail2ban.d/99-web-protection.local
+    owner: root
+    group: root
+    mode: "0644"
+  register: install_fail2ban_daemon_config
+
+- name: Install Fail2Ban custom filters
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/fail2ban/filter.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - apache-malicious-paths.conf
+    - apache-scanner-useragents.conf
+    - apache-scanburst.conf
+  register: install_fail2ban_filter_config
+
+- name: Install Fail2Ban Apache/Moodle jail configuration
+  ansible.builtin.template:
+    src: 99-apache-moodle-bots.local.j2
+    dest: /etc/fail2ban/jail.d/99-apache-moodle-bots.local
+    owner: root
+    group: root
+    mode: "0644"
+  register: install_fail2ban_jail_config
+
+- name: Validate Fail2Ban configuration before activation
+  ansible.builtin.command:
+    cmd: fail2ban-client -t
+  changed_when: false
+
+- name: Run local Fail2Ban regex smoke test for malicious paths
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tmpfile="$(mktemp)"
+    trap 'rm -f "$tmpfile"' EXIT
+    cat >"$tmpfile" <<'EOF'
+    203.0.113.10 - - [23/Jul/2026:14:00:00 +0200] "GET /.env HTTP/1.1" 404 123 "-" "Mozilla/5.0"
+    203.0.113.13 - - [23/Jul/2026:14:00:03 +0200] "GET /login/index.php?redirect=/wp-login.php HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+    EOF
+    fail2ban-regex "$tmpfile" /etc/fail2ban/filter.d/apache-malicious-paths.conf | grep -q '1 matched, 1 missed'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: install_fail2ban_run_filter_smoke_tests | bool
+
+- name: Run local Fail2Ban regex smoke test for scanner user agents
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tmpfile="$(mktemp)"
+    trap 'rm -f "$tmpfile"' EXIT
+    cat >"$tmpfile" <<'EOF'
+    203.0.113.15 - - [23/Jul/2026:14:00:05 +0200] "GET / HTTP/1.1" 200 512 "-" "sqlmap/1.8"
+    203.0.113.17 - - [23/Jul/2026:14:00:07 +0200] "GET / HTTP/1.1" 200 512 "-" "curl/8.10.0"
+    EOF
+    fail2ban-regex "$tmpfile" /etc/fail2ban/filter.d/apache-scanner-useragents.conf | grep -q '1 matched, 1 missed'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: install_fail2ban_run_filter_smoke_tests | bool
+
+- name: Enable and start Fail2Ban service
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Restart Fail2Ban when managed configuration changed
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+    enabled: true
+  when: >-
+    install_fail2ban_daemon_config.changed or
+    install_fail2ban_filter_config.changed or
+    install_fail2ban_jail_config.changed
+
+- name: Gather service facts after Fail2Ban activation
+  ansible.builtin.service_facts:
+
+- name: Assert Fail2Ban service is active
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services['fail2ban.service'].state == 'running'
+    fail_msg: "Fail2Ban service is not running after activation."
+    success_msg: "Fail2Ban service is running."
+
+- name: Show loaded Fail2Ban jails
+  ansible.builtin.command:
+    cmd: fail2ban-client status
+  register: install_fail2ban_status
+  changed_when: false
+
+- name: Print Fail2Ban status
+  ansible.builtin.debug:
+    var: install_fail2ban_status.stdout_lines
+
+- name: Test nftables ban action with documentation IP
+  when: install_fail2ban_run_nft_test_ban | bool
+  block:
+    - name: Ban documentation test IP in apache-malicious-paths jail
+      ansible.builtin.command:
+        cmd: "fail2ban-client set apache-malicious-paths banip {{ install_fail2ban_test_ban_ip }}"
+      changed_when: true
+
+    - name: Verify documentation test IP appears in nftables ruleset
+      ansible.builtin.command:
+        cmd: nft list ruleset
+      register: install_fail2ban_nft_ruleset
+      changed_when: false
+      failed_when: install_fail2ban_test_ban_ip not in install_fail2ban_nft_ruleset.stdout
+  always:
+    - name: Unban documentation test IP from apache-malicious-paths jail
+      ansible.builtin.command:
+        cmd: "fail2ban-client set apache-malicious-paths unbanip {{ install_fail2ban_test_ban_ip }}"
+      changed_when: true
+      failed_when: false

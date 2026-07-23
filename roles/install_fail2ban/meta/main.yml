@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  role_name: install_fail2ban
+  namespace: local
+  author: Bernd
+  description: Install and activate Fail2Ban Apache/Moodle protection with nftables.
+  license: MIT
+  min_ansible_version: "2.10"
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+
+dependencies: []

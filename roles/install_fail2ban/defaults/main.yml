@@ -1,0 +1,44 @@
+---
+install_fail2ban_packages:
+  - fail2ban
+
+install_fail2ban_require_nftables: true
+install_fail2ban_require_apache_log_dir: true
+install_fail2ban_apache_log_dir: /var/log/apache2
+
+install_fail2ban_backup_existing_config: true
+install_fail2ban_backup_dir: /root/fail2ban-backup
+
+install_fail2ban_ignoreip:
+  - 127.0.0.1/8
+  - "::1"
+
+install_fail2ban_access_log: /var/log/apache2/*access.log
+install_fail2ban_error_log: /var/log/apache2/*error.log
+
+install_fail2ban_banaction: nftables
+install_fail2ban_banaction_allports: "nftables[type=allports]"
+install_fail2ban_backend: auto
+install_fail2ban_usedns: "no"
+install_fail2ban_ignoreself: true
+
+install_fail2ban_malicious_paths_enabled: true
+install_fail2ban_scanner_useragents_enabled: true
+install_fail2ban_scanburst_enabled: true
+install_fail2ban_overflows_enabled: true
+install_fail2ban_shellshock_enabled: true
+install_fail2ban_recidive_enabled: true
+
+install_fail2ban_scanburst_maxretry: 80
+install_fail2ban_scanburst_findtime: 5m
+install_fail2ban_scanburst_bantime: 12h
+install_fail2ban_scanburst_maxtime: 90d
+install_fail2ban_scanburst_multipliers: "1 2 6 14 60 180"
+
+install_fail2ban_recidive_maxretry: 3
+install_fail2ban_recidive_findtime: 7d
+install_fail2ban_recidive_bantime: -1
+
+install_fail2ban_run_filter_smoke_tests: true
+install_fail2ban_run_nft_test_ban: true
+install_fail2ban_test_ban_ip: 192.0.2.123

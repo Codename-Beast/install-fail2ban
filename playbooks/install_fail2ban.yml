@@ -1,0 +1,8 @@
+---
+- name: Install and activate Fail2Ban web protection
+  hosts: fail2ban_targets
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: install_fail2ban
