@@ -56,7 +56,7 @@ Zusatzargumente kommen einfach als weitere Extra-Vars dazu:
 ```bash
 ansible-playbook install_fail2ban.yml \
   -e hosts=hc-testmaschine \
-  -e install_fail2ban_report_only=true \
+  -e report_only=true \
   -i inventory/hosts
 
 ansible-playbook install_fail2ban.yml \
@@ -65,10 +65,19 @@ ansible-playbook install_fail2ban.yml \
   -i prod
 ```
 
-Alternativ bleibt auch der nicht reservierte Variablenname möglich:
+Hinweis zu Ansible ab 2.21.2:
+
+`-e hosts=...` funktioniert, Ansible warnt aber, weil `hosts` ein reservierter Name ist.
+Für den gewohnten Kurzaufruf bleibt es unterstützt:
 
 ```bash
-ansible-playbook install_fail2ban.yml -e install_fail2ban_hosts=web01 -i inventory/hosts
+ansible-playbook install_fail2ban.yml -e hosts=hc-testmaschine -i inventory/hosts
+```
+
+Sauberer ist der rolleneigene Variablenname:
+
+```bash
+ansible-playbook install_fail2ban.yml -e install_fail2ban_hosts=hc-testmaschine -i inventory/hosts
 ```
 
 Vorher prüfen:
@@ -93,6 +102,13 @@ ansible-playbook -i inventory/hosts install_fail2ban.yml --check --diff
 - startet oder restartet Fail2Ban erst nach erfolgreicher Prüfung
 - gibt danach Service-Status, aktive Jails und Ban-Zähler aus
 - kann optional den Fail2Ban Prometheus Exporter installieren
+
+---
+
+## Weitere Dokumente
+
+- `CHANGELOG.md`: Änderungen und Versionen
+- `MANUELL.md`: händische Absicherung eines Servers, falls Ansible nicht verfügbar ist
 
 ---
 
@@ -274,8 +290,10 @@ Der Exporter liest den Fail2Ban-Socket `/var/run/fail2ban/fail2ban.sock` und lä
 Für eine reine Bestandsaufnahme ohne Installation und ohne Dateischreibungen:
 
 ```bash
-ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_report_only=true
+ansible-playbook install_fail2ban.yml -e report_only=true -i inventory/hosts
 ```
+
+`report_only` ist absichtlich kurz gehalten und wird nur als Extra-Var übergeben.
 
 Dabei werden nur Statusdaten gelesen:
 

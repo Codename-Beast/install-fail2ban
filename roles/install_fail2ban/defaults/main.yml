@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "1.0.0"
+install_fail2ban_role_version: "1.1.0"
 
 # install_fail2ban defaults
 #
@@ -196,7 +196,3 @@ install_fail2ban_exporter_service_name: fail2ban-exporter
 
 # SSH key logins use trusted source IPs; these must never be banned.
 install_fail2ban_require_trusted_whitelist_for_sshd: true
-
-# -- Reporting / read-only mode ------------------------------------
-# report_only reads the current Fail2Ban status/config and stops without writes.
-install_fail2ban_report_only: false

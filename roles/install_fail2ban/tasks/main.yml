@@ -11,11 +11,11 @@
   include_tasks: report.yml
   vars:
     install_fail2ban_report_title: "Fail2Ban status before changes"
-  when: install_fail2ban_report_only | bool
+  when: report_only | default(false) | bool
 
 - name: "Report | stop read-only run"
   meta: end_host
-  when: install_fail2ban_report_only | bool
+  when: report_only | default(false) | bool
 
 - name: "Preflight | check supported OS"
   assert:
