@@ -1,10 +1,42 @@
 ---
 # Die Reihenfolge ist sicherheitsrelevant:
-# 1. Voraussetzungen prüfen.
-# 2. Fail2Ban installieren.
-# 3. verwaltete Dateien schreiben.
-# 4. Konfiguration testen.
-# 5. erst danach Dienst starten/aktivieren/restarten.
+# 1. Reiner Report-Modus darf vor Preflight enden.
+# 2. Voraussetzungen prüfen.
+# 3. Fail2Ban installieren.
+# 4. verwaltete Dateien schreiben.
+# 5. Konfiguration testen.
+# 6. erst danach Dienst starten/aktivieren/restarten.
+
+- name: "Report | vorhandenen Fail2Ban-Status nur lesen"
+  ansible.builtin.command:
+    cmd: fail2ban-client status
+  register: install_fail2ban_report_only_status
+  changed_when: false
+  failed_when: false
+  when: install_fail2ban_report_only | bool
+
+- name: "Report | vorhandene Fail2Ban-Konfiguration nur dumpen"
+  ansible.builtin.command:
+    cmd: fail2ban-client -d
+  register: install_fail2ban_report_only_dump
+  changed_when: false
+  failed_when: false
+  when: install_fail2ban_report_only | bool
+
+- name: "Report | Nur-Lesen-Ergebnis anzeigen"
+  ansible.builtin.debug:
+    msg:
+      - "Fail2Ban status rc={{ install_fail2ban_report_only_status.rc | default('n/a') }}"
+      - "{{ install_fail2ban_report_only_status.stdout_lines | default([]) }}"
+      - "Fail2Ban config dump rc={{ install_fail2ban_report_only_dump.rc | default('n/a') }}"
+      - "{{ install_fail2ban_report_only_dump.stdout_lines | default([]) }}"
+      - "{{ install_fail2ban_report_only_status.stderr_lines | default([]) }}"
+      - "{{ install_fail2ban_report_only_dump.stderr_lines | default([]) }}"
+  when: install_fail2ban_report_only | bool
+
+- name: "Report | Nur-Lesen-Modus beenden"
+  ansible.builtin.meta: end_host
+  when: install_fail2ban_report_only | bool
 
 - name: "Preflight | unterstützte Distribution prüfen"
   ansible.builtin.assert:
@@ -128,7 +160,7 @@
   register: install_fail2ban_report_before_status
   changed_when: false
   failed_when: false
-  when: install_fail2ban_report_before | bool or install_fail2ban_report_only | bool
+  when: install_fail2ban_report_before | bool
 
 - name: "Report | vorhandene Fail2Ban-Konfiguration vor Änderungen dumpen"
   ansible.builtin.command:
@@ -136,7 +168,7 @@
   register: install_fail2ban_report_before_dump
   changed_when: false
   failed_when: false
-  when: install_fail2ban_report_before | bool or install_fail2ban_report_only | bool
+  when: install_fail2ban_report_before | bool
 
 - name: "Report | Ergebnis vor Änderungen anzeigen"
   ansible.builtin.debug:
@@ -147,11 +179,7 @@
       - "{{ install_fail2ban_report_before_dump.stdout_lines | default([]) }}"
       - "{{ install_fail2ban_report_before_status.stderr_lines | default([]) }}"
       - "{{ install_fail2ban_report_before_dump.stderr_lines | default([]) }}"
-  when: install_fail2ban_report_before | bool or install_fail2ban_report_only | bool
-
-- name: "Report | Nur-Lesen-Modus beenden"
-  ansible.builtin.meta: end_host
-  when: install_fail2ban_report_only | bool
+  when: install_fail2ban_report_before | bool
 
 - name: "Setup | Fail2Ban installieren"
   ansible.builtin.apt:
@@ -159,6 +187,16 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: "Setup | node_exporter Paket optional installieren"
+  ansible.builtin.apt:
+    name: "{{ install_fail2ban_node_exporter_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - install_fail2ban_node_exporter_textfile_enabled | bool
+    - install_fail2ban_node_exporter_install_package | bool
 
 - name: "Backup | Backup-Verzeichnis anlegen"
   ansible.builtin.file:
@@ -333,6 +371,62 @@
     install_fail2ban_static_filter_config.changed or
     install_fail2ban_scanner_filter_config.changed or
     install_fail2ban_jail_config.changed
+
+- name: "Monitoring | Textfile-Verzeichnis anlegen"
+  ansible.builtin.file:
+    path: "{{ install_fail2ban_node_exporter_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
+- name: "Monitoring | Fail2Ban-Metrikskript installieren"
+  ansible.builtin.template:
+    src: fail2ban-node-exporter-textfile.sh.j2
+    dest: "{{ install_fail2ban_node_exporter_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: install_fail2ban_node_exporter_script
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
+- name: "Monitoring | Cronjob für Fail2Ban-Metriken installieren"
+  ansible.builtin.copy:
+    dest: "{{ install_fail2ban_node_exporter_cron_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Verwaltet durch Ansible-Rolle install_fail2ban.
+      # Schreibt Fail2Ban-Metriken für node_exporter Textfile Collector.
+      SHELL=/bin/bash
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      {{ install_fail2ban_node_exporter_cron_schedule }} {{ install_fail2ban_node_exporter_cron_user }} {{ install_fail2ban_node_exporter_script_path }}
+  register: install_fail2ban_node_exporter_cron
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
+- name: "Monitoring | Fail2Ban-Metriken einmal erzeugen"
+  ansible.builtin.command:
+    cmd: "{{ install_fail2ban_node_exporter_script_path }}"
+  changed_when: false
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
+- name: "Monitoring | Metrikdatei prüfen"
+  ansible.builtin.stat:
+    path: "{{ install_fail2ban_node_exporter_textfile_dir }}/{{ install_fail2ban_node_exporter_metrics_file }}"
+  register: install_fail2ban_node_exporter_metrics_stat
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
+- name: "Monitoring | Metrikdatei bestätigen"
+  ansible.builtin.assert:
+    that:
+      - install_fail2ban_node_exporter_metrics_stat.stat.exists
+      - install_fail2ban_node_exporter_metrics_stat.stat.size > 0
+    fail_msg: "Fail2Ban-Metrikdatei wurde nicht erzeugt."
+    success_msg: "Fail2Ban-Metrikdatei wurde erzeugt."
+  when: install_fail2ban_node_exporter_textfile_enabled | bool
+
 
 - name: "Verify | Service-Fakten nach Aktivierung sammeln"
   ansible.builtin.service_facts:

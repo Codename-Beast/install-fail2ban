@@ -220,6 +220,49 @@ install_fail2ban_apache_auth_findtime: 10m
 install_fail2ban_apache_auth_bantime: 1d
 ```
 
+## node_exporter Textfile-Metriken
+
+Optional kann die Rolle Fail2Ban-Metriken für den node_exporter Textfile Collector bereitstellen.
+
+Default ist aus:
+
+```yaml
+install_fail2ban_node_exporter_textfile_enabled: false
+```
+
+Aktivieren, wenn node_exporter bereits mit Textfile Collector läuft:
+
+```yaml
+install_fail2ban_node_exporter_textfile_enabled: true
+install_fail2ban_node_exporter_textfile_dir: /var/lib/prometheus/node-exporter
+```
+
+Optional auch das Debian/Ubuntu-Paket installieren:
+
+```yaml
+install_fail2ban_node_exporter_install_package: true
+install_fail2ban_node_exporter_package: prometheus-node-exporter
+```
+
+Die Rolle installiert dann:
+
+```text
+/usr/local/sbin/fail2ban-node-exporter-textfile.sh
+/etc/cron.d/fail2ban-node-exporter-textfile
+/var/lib/prometheus/node-exporter/fail2ban.prom
+```
+
+Erzeugte Metriken:
+
+```text
+fail2ban_up
+fail2ban_jails
+fail2ban_jail_currently_banned{jail="sshd"}
+fail2ban_jail_total_banned{jail="sshd"}
+```
+
+Das Skript schreibt atomar über eine temporäre Datei. Wenn `fail2ban-client` nicht erreichbar ist, wird `fail2ban_up 0` geschrieben statt einen kaputten Cronjob zu erzeugen.
+
 ## Idempotenz und Aktivierungsreihenfolge
 
 Die Rolle kann mehrfach laufen:

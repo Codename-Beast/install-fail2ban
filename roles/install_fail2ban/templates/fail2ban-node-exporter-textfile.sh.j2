@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Schreibt Fail2Ban-Metriken für den node_exporter Textfile-Collector.
+# Keine langen Prozesse: Cron startet das Skript regelmäßig neu.
+
+TEXTFILE_DIR="{{ install_fail2ban_node_exporter_textfile_dir }}"
+METRICS_FILE="${TEXTFILE_DIR}/{{ install_fail2ban_node_exporter_metrics_file }}"
+TMP_FILE="${METRICS_FILE}.$$"
+FAIL2BAN_CLIENT="${FAIL2BAN_CLIENT:-fail2ban-client}"
+
+mkdir -p "${TEXTFILE_DIR}"
+
+# Wenn Fail2Ban nicht antwortet, bleibt Monitoring nutzbar und zeigt up=0.
+if ! STATUS="$(${FAIL2BAN_CLIENT} status 2>/dev/null)"; then
+  {
+    echo '# HELP fail2ban_up Fail2Ban client status: 1=available, 0=unavailable.'
+    echo '# TYPE fail2ban_up gauge'
+    echo 'fail2ban_up 0'
+  } >"${TMP_FILE}"
+  mv "${TMP_FILE}" "${METRICS_FILE}"
+  exit 0
+fi
+
+# Jail-Liste robust aus der Status-Ausgabe ziehen.
+JAILS="$(printf '%s\n' "${STATUS}" \
+  | sed -n 's/.*Jail list:[[:space:]]*//p' \
+  | tr ',' ' ' \
+  | xargs || true)"
+
+JAIL_ARRAY=()
+if [ -n "${JAILS}" ]; then
+  read -r -a JAIL_ARRAY <<<"${JAILS}"
+fi
+
+{
+  echo '# HELP fail2ban_up Fail2Ban client status: 1=available, 0=unavailable.'
+  echo '# TYPE fail2ban_up gauge'
+  echo 'fail2ban_up 1'
+  echo '# HELP fail2ban_jails Number of loaded Fail2Ban jails.'
+  echo '# TYPE fail2ban_jails gauge'
+  printf 'fail2ban_jails %s\n' "{{ '${#JAIL_ARRAY[@]}' }}"
+  echo '# HELP fail2ban_jail_currently_banned Currently banned IPs per jail.'
+  echo '# TYPE fail2ban_jail_currently_banned gauge'
+  echo '# HELP fail2ban_jail_total_banned Total banned IPs per jail since Fail2Ban start.'
+  echo '# TYPE fail2ban_jail_total_banned counter'
+
+  for jail in "${JAIL_ARRAY[@]}"; do
+    JAIL_STATUS="$(${FAIL2BAN_CLIENT} status "${jail}" 2>/dev/null || true)"
+    CURRENT="$(printf '%s\n' "${JAIL_STATUS}" | sed -n 's/.*Currently banned:[[:space:]]*//p' | tail -n1)"
+    TOTAL="$(printf '%s\n' "${JAIL_STATUS}" | sed -n 's/.*Total banned:[[:space:]]*//p' | tail -n1)"
+    CURRENT="${CURRENT:-0}"
+    TOTAL="${TOTAL:-0}"
+    LABEL_JAIL="${jail//\\/\\\\}"
+    LABEL_JAIL="${LABEL_JAIL//\"/\\\"}"
+    printf 'fail2ban_jail_currently_banned{jail="%s"} %s\n' "${LABEL_JAIL}" "${CURRENT}"
+    printf 'fail2ban_jail_total_banned{jail="%s"} %s\n' "${LABEL_JAIL}" "${TOTAL}"
+  done
+} >"${TMP_FILE}"
+
+# Atomarer Austausch verhindert halb geschriebene .prom-Dateien.
+mv "${TMP_FILE}" "${METRICS_FILE}"

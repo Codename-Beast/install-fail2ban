@@ -186,6 +186,19 @@ install_fail2ban_recidive_maxretry: 3
 install_fail2ban_recidive_findtime: 7d
 install_fail2ban_recidive_bantime: -1
 
+# -- node_exporter Textfile Collector -----------------------------
+# Optionaler Prometheus-Export ohne eigenen Daemon: Cron schreibt eine .prom-Datei
+# in das node_exporter Textfile-Verzeichnis.
+install_fail2ban_node_exporter_textfile_enabled: false
+install_fail2ban_node_exporter_install_package: false
+install_fail2ban_node_exporter_package: prometheus-node-exporter
+install_fail2ban_node_exporter_textfile_dir: /var/lib/prometheus/node-exporter
+install_fail2ban_node_exporter_script_path: /usr/local/sbin/fail2ban-node-exporter-textfile.sh
+install_fail2ban_node_exporter_metrics_file: fail2ban.prom
+install_fail2ban_node_exporter_cron_file: /etc/cron.d/fail2ban-node-exporter-textfile
+install_fail2ban_node_exporter_cron_schedule: "* * * * *"
+install_fail2ban_node_exporter_cron_user: root
+
 # -- Reporting / Nur-Lesen-Modus ----------------------------------
 # report_only liest die vorhandene aktive/lokale Fail2Ban-Konfiguration aus und
 # beendet den Host danach ohne Installation oder Dateischreibungen.
