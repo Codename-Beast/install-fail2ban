@@ -1,15 +1,17 @@
 ---
-install_fail2ban_role_version: "0.3.0"
+install_fail2ban_role_version: "0.4.0"
 
 # install_fail2ban — Defaults
 #
-# Security model:
-#   - nftables must already exist on the target host.
-#   - The role installs Fail2Ban only, not nftables.
-#   - Existing non-managed Fail2Ban jails are not changed globally.
-#   - Whitelisting is mapped to Fail2Ban ignoreip per managed jail.
+# Sicherheitsmodell:
+#   - nftables muss auf dem Zielserver bereits vorhanden sein.
+#   - Die Rolle installiert bewusst nur Fail2Ban, nicht nftables.
+#   - Verwaltete Jails stehen in einer eigenen Datei.
+#   - Es gibt keinen globalen [DEFAULT]-Block für Jails, damit fremde Jails nicht
+#     versehentlich verändert werden.
+#   - Whitelisting wird je verwaltetem Jail als ignoreip gerendert.
 
-# -- Packages ------------------------------------------------------
+# -- Pakete --------------------------------------------------------
 install_fail2ban_packages:
   - fail2ban
 
@@ -19,46 +21,62 @@ install_fail2ban_require_apache_log_dir: true
 install_fail2ban_apache_log_dir: /var/log/apache2
 
 # -- Backup --------------------------------------------------------
+# Initiales Sicherheitsbackup. Der Marker verhindert, dass jeder idempotente Lauf
+# ein weiteres Tar-Archiv erzeugt.
 install_fail2ban_backup_existing_config: true
 install_fail2ban_backup_dir: /root/fail2ban-backup
 install_fail2ban_backup_marker: /root/fail2ban-backup/.install_fail2ban_initial_backup_done
 
-# -- IP Whitelist --------------------------------------------------
-# Base entries are always protected from managed Fail2Ban jails.
+# -- IP-Whitelist --------------------------------------------------
+# Basiswerte sind immer vor Bans geschützt.
 install_fail2ban_base_ignoreip:
   - 127.0.0.1/8
   - "::1"
 
-# Backward-compatible alias. If you already used install_fail2ban_ignoreip,
-# it is still consumed by the template.
+# Rückwärtskompatibler Alias. Wer install_fail2ban_ignoreip bereits nutzt,
+# kann diese Liste weiter überschreiben.
 install_fail2ban_ignoreip:
   - 127.0.0.1/8
   - "::1"
 
-# Additional customer/ops whitelist. Add management VPN, monitoring,
-# authorised scanners or static admin IPs here. Avoid broad private networks
-# unless every source in that network is trusted.
+# Explizite Admin-/Monitoring-/VPN-/Scanner-IPs.
+# Keine großen Netze pauschal freistellen, wenn dort nicht alles vertrauenswürdig ist.
 install_fail2ban_ip_whitelist_enabled: true
 install_fail2ban_allowed_ips: []
-# Example:
+# Beispiel:
 # install_fail2ban_allowed_ips:
 #   - 203.0.113.55
 #   - 198.51.100.0/24
 
-# -- Log paths -----------------------------------------------------
-# Active logs only. Do not use *access.log* because that also catches rotated logs.
+# Optional: vorhandene nftables-Sets auslesen und als Fail2Ban-ignoreip übernehmen.
+# WICHTIG: Das ist absichtlich opt-in. Aus einem kompletten nftables-Ruleset kann man
+# nicht sicher ableiten, welche IPs erlaubt sind — dort können auch Blocklisten stehen.
+# Daher werden nur Sets mit explizit erlaubten Namen ausgelesen.
+install_fail2ban_nft_whitelist_import_enabled: false
+install_fail2ban_nft_whitelist_set_names:
+  - monitoring_ips
+  - monitoring_ipv4
+  - monitoring_ipv6
+  - management_ips
+  - mgmt_ips
+  - admin_ips
+  - trusted_ips
+  - fail2ban_ignore
+
+# -- Logpfade ------------------------------------------------------
+# Nur aktive Logs. Kein *access.log*, weil sonst rotierte Dateien erfasst werden können.
 install_fail2ban_access_log: /var/log/apache2/*access.log
 install_fail2ban_error_log: /var/log/apache2/*error.log
 
-# -- Fail2Ban action defaults -------------------------------------
+# -- Fail2Ban Action Defaults -------------------------------------
 install_fail2ban_banaction: nftables
 install_fail2ban_banaction_allports: "nftables[type=allports]"
 install_fail2ban_backend: auto
 install_fail2ban_usedns: "no"
 install_fail2ban_ignoreself: true
 
-# -- Managed jail enablement --------------------------------------
-# High-confidence default jails. These are active by default.
+# -- Verwaltete Jails ---------------------------------------------
+# Konkrete Empfehlung: diese Jails sind standardmäßig aktiv.
 install_fail2ban_sshd_enabled: true
 install_fail2ban_malicious_paths_enabled: true
 install_fail2ban_scanner_useragents_enabled: true
@@ -67,15 +85,15 @@ install_fail2ban_overflows_enabled: true
 install_fail2ban_shellshock_enabled: true
 install_fail2ban_recidive_enabled: true
 
-# Optional built-in Apache jails. Disabled by default to avoid false positives.
+# Sinnvoll, aber nicht blind aktivieren. Erst gegen echte Logs testen.
 install_fail2ban_apache_auth_enabled: false
 install_fail2ban_apache_badbots_enabled: false
 install_fail2ban_apache_botsearch_enabled: false
 
-# -- SSH daemon protection -----------------------------------------
-# Uses the built-in sshd filter. systemd backend works well on modern Debian/Ubuntu.
-# If your target logs SSH only to /var/log/auth.log and systemd backend is unavailable,
-# set install_fail2ban_sshd_backend: auto and install_fail2ban_sshd_logpath: /var/log/auth.log.
+# -- SSH daemon Schutz ---------------------------------------------
+# Eingebauter Fail2Ban-Filter sshd. systemd ist auf modernen Debian/Ubuntu-Systemen
+# robust. Wenn ein Ziel nur /var/log/auth.log nutzt, backend auf auto setzen und
+# install_fail2ban_sshd_logpath: /var/log/auth.log konfigurieren.
 install_fail2ban_sshd_port: ssh
 install_fail2ban_sshd_backend: systemd
 install_fail2ban_sshd_logpath: ""
@@ -87,7 +105,43 @@ install_fail2ban_sshd_bantime_multipliers: "1 2 6 24 72"
 install_fail2ban_sshd_bantime_maxtime: 7d
 install_fail2ban_sshd_bantime_rndtime: 5m
 
-# -- High-confidence permanent bans -------------------------------
+# -- Scanner-User-Agents -------------------------------------------
+# Diese Liste wird als Literal-Liste behandelt und im Template regex-escaped.
+# Generic Tools wie curl/wget/python-requests bleiben bewusst draußen.
+install_fail2ban_scanner_useragents:
+  - sqlmap
+  - nikto
+  - nmap scripting engine
+  - masscan
+  - zgrab
+  - zmap
+  - gobuster
+  - dirbuster
+  - dirsearch
+  - feroxbuster
+  - ffuf
+  - wpscan
+  - nuclei
+  - acunetix
+  - nessus
+  - openvas
+  - havij
+  - whatweb
+  - censysinspect
+  - internetmeasurement
+  - jaeles
+  - arachni
+  - wapiti
+  - skipfish
+
+# Ergänzungen pro Umgebung, z.B. eigener Scanner-Name.
+install_fail2ban_scanner_useragents_extra: []
+
+# User-Agent-Fragmente, die trotz Treffer nicht gebannt werden sollen.
+# Beispiel: autorisierter interner Scanner mit eindeutigem UA.
+install_fail2ban_scanner_useragents_ignore: []
+
+# -- Eindeutige/permanente Web-Bans -------------------------------
 install_fail2ban_malicious_paths_maxretry: 1
 install_fail2ban_malicious_paths_findtime: 1d
 install_fail2ban_malicious_paths_bantime: -1
@@ -104,8 +158,8 @@ install_fail2ban_shellshock_maxretry: 1
 install_fail2ban_shellshock_findtime: 1d
 install_fail2ban_shellshock_bantime: -1
 
-# -- Behaviour-based scanburst ------------------------------------
-# Conservative default for public Moodle systems behind NAT/campus networks.
+# -- Verhaltensbasierter Scanburst --------------------------------
+# Konservativer Startwert für öffentliche Moodle-Systeme und NAT-/Campus-Netze.
 install_fail2ban_scanburst_maxretry: 80
 install_fail2ban_scanburst_findtime: 5m
 install_fail2ban_scanburst_bantime: 12h
@@ -114,7 +168,7 @@ install_fail2ban_scanburst_multipliers: "1 2 6 14 60 180"
 install_fail2ban_scanburst_rndtime: 10m
 install_fail2ban_scanburst_overalljails: false
 
-# -- Optional built-ins -------------------------------------------
+# -- Optionale eingebaute Apache-Jails -----------------------------
 install_fail2ban_apache_auth_maxretry: 5
 install_fail2ban_apache_auth_findtime: 10m
 install_fail2ban_apache_auth_bantime: 1d
@@ -132,7 +186,14 @@ install_fail2ban_recidive_maxretry: 3
 install_fail2ban_recidive_findtime: 7d
 install_fail2ban_recidive_bantime: -1
 
-# -- Verification -------------------------------------------------
+# -- Reporting / Nur-Lesen-Modus ----------------------------------
+# report_only liest die vorhandene aktive/lokale Fail2Ban-Konfiguration aus und
+# beendet den Host danach ohne Installation oder Dateischreibungen.
+install_fail2ban_report_only: false
+install_fail2ban_report_before: false
+install_fail2ban_report_after: false
+
+# -- Verifikation --------------------------------------------------
 install_fail2ban_run_filter_smoke_tests: true
 install_fail2ban_run_nft_test_ban: true
 install_fail2ban_test_ban_ip: 192.0.2.123

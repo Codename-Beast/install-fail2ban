@@ -1,16 +1,17 @@
-# Managed by Ansible role install_fail2ban.
-# No [DEFAULT] section is used here, so existing SSH or service jails are not changed globally.
+# Verwaltet durch Ansible-Rolle install_fail2ban.
+#
+# Wichtig:
+# - Kein globaler [DEFAULT]-Abschnitt: diese Datei soll fremde SSH-/Service-Jails
+#   nicht nebenbei verändern.
+# - ignoreip wird zentral aus Basiswerten, expliziter Whitelist und optional
+#   importierten nftables-Sets gebaut.
 
-{% set _base_ignoreip = install_fail2ban_ignoreip | default(install_fail2ban_base_ignoreip) %}
-{% if install_fail2ban_ip_whitelist_enabled | bool %}
-{% set _allowed_ips = install_fail2ban_allowed_ips | default([]) %}
-{% else %}
-{% set _allowed_ips = [] %}
-{% endif %}
-{% set ignoreip = (_base_ignoreip + _allowed_ips) | unique | list | join(' ') %}
+{% set ignoreip = install_fail2ban_effective_ignoreip | default(install_fail2ban_ignoreip | default(install_fail2ban_base_ignoreip)) | unique | list | join(' ') %}
 
 # -----------------------------------------------------------------------------
-# SSH daemon protection. Keep this conservative: SSH lockouts are operationally painful.
+# SSH-Bruteforce-Schutz.
+# Konservativ halten: ein SSH-Lockout ist betrieblich deutlich schlimmer als ein
+# temporär nicht gesperrter Fehlversuch.
 # -----------------------------------------------------------------------------
 [sshd]
 enabled = {{ install_fail2ban_sshd_enabled | ternary('true', 'false') }}
@@ -35,7 +36,8 @@ bantime.maxtime = {{ install_fail2ban_sshd_bantime_maxtime }}
 bantime.rndtime = {{ install_fail2ban_sshd_bantime_rndtime }}
 
 # -----------------------------------------------------------------------------
-# High-confidence malicious path requests
+# Eindeutig bösartige Pfade: Fremdsysteme, Secrets, Webshells, bekannte Exploits.
+# Ein Treffer reicht für einen permanenten Ban auf HTTP/HTTPS.
 # -----------------------------------------------------------------------------
 [apache-malicious-paths]
 enabled = {{ install_fail2ban_malicious_paths_enabled | ternary('true', 'false') }}
@@ -56,7 +58,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Explicitly identified vulnerability scanners
+# Explizit benannte Scanner im User-Agent.
+# Die Liste kommt aus defaults/main.yml und kann pro Host erweitert werden.
 # -----------------------------------------------------------------------------
 [apache-scanner-useragents]
 enabled = {{ install_fail2ban_scanner_useragents_enabled | ternary('true', 'false') }}
@@ -77,7 +80,9 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Broad automated path scanning; deliberately temporary/progressive, not instant permanent.
+# Breite Pfadscans über viele 400/403/404/405/408/414 Antworten.
+# Dieser Jail ist absichtlich nicht sofort permanent, weil NAT-/Campus-IP-Adressen
+# viele legitime Benutzer repräsentieren können.
 # -----------------------------------------------------------------------------
 [apache-scanburst]
 enabled = {{ install_fail2ban_scanburst_enabled | ternary('true', 'false') }}
@@ -101,7 +106,7 @@ bantime.rndtime = {{ install_fail2ban_scanburst_rndtime }}
 bantime.overalljails = {{ install_fail2ban_scanburst_overalljails | ternary('true', 'false') }}
 
 # -----------------------------------------------------------------------------
-# Built-in Apache overflow detection
+# Eingebauter Apache-Overflow-Filter.
 # -----------------------------------------------------------------------------
 [apache-overflows]
 enabled = {{ install_fail2ban_overflows_enabled | ternary('true', 'false') }}
@@ -122,7 +127,7 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Built-in Apache Shellshock detection
+# Eingebauter Shellshock-Filter. Shellshock-Probes sind hochgradig eindeutig.
 # -----------------------------------------------------------------------------
 [apache-shellshock]
 enabled = {{ install_fail2ban_shellshock_enabled | ternary('true', 'false') }}
@@ -143,7 +148,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
-# Optional Apache Basic/Digest auth errors. Not Moodle form login.
+# Optional: Apache Basic/Digest Auth. Das ist NICHT der Moodle-Formularlogin.
+# Nur aktivieren, wenn Apache-Auth wirklich genutzt wird.
 # -----------------------------------------------------------------------------
 [apache-auth]
 enabled = {{ install_fail2ban_apache_auth_enabled | ternary('true', 'false') }}
@@ -162,7 +168,9 @@ findtime = {{ install_fail2ban_apache_auth_findtime }}
 bantime = {{ install_fail2ban_apache_auth_bantime }}
 
 # -----------------------------------------------------------------------------
-# Optional built-in UA/path helpers. Disabled by default; test against real logs before enabling.
+# Optional: eingebaute Apache-Bot-Hilfsfilter.
+# Default bleibt false, weil sie je nach Logformat/Anwendung False Positives
+# erzeugen oder sich mit den eigenen Filtern überschneiden können.
 # -----------------------------------------------------------------------------
 [apache-badbots]
 enabled = {{ install_fail2ban_apache_badbots_enabled | ternary('true', 'false') }}
@@ -197,7 +205,8 @@ findtime = {{ install_fail2ban_apache_botsearch_findtime }}
 bantime = {{ install_fail2ban_apache_botsearch_bantime }}
 
 # -----------------------------------------------------------------------------
-# Permanent all-port ban for repeat offenders
+# Wiederholungstäter: wer innerhalb des Fensters mehrfach von anderen Jails
+# gebannt wurde, wird dauerhaft auf allen Ports gesperrt.
 # -----------------------------------------------------------------------------
 [recidive]
 enabled = {{ install_fail2ban_recidive_enabled | ternary('true', 'false') }}

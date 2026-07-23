@@ -1,0 +1,16 @@
+[Definition]
+# Verwaltet durch Ansible-Rolle install_fail2ban.
+#
+# Dieser Filter sperrt nur explizit benannte Security-/Enumeration-Tools.
+# Generische Clients wie curl, wget, python-requests oder Go-http-client sind
+# bewusst nicht enthalten, weil sie auch für Monitoring, APIs und Administration
+# legitim verwendet werden.
+
+{% set _scanner_agents = (install_fail2ban_scanner_useragents | default([])) + (install_fail2ban_scanner_useragents_extra | default([])) %}
+{% set _scanner_ignore_agents = install_fail2ban_scanner_useragents_ignore | default([]) %}
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+{% if _scanner_ignore_agents | length > 0 %}
+ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+{% else %}
+ignoreregex =
+{% endif %}

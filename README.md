@@ -1,8 +1,8 @@
 # install_fail2ban
 
-Ansible-Rolle für Debian/Ubuntu-Webserver: installiert Fail2Ban, spielt eine Apache/Moodle-Bot-Schutzkonfiguration ein, prüft die Konfiguration kurz und schaltet Fail2Ban aktiv.
+Ansible-Rolle für Debian/Ubuntu-Webserver: installiert Fail2Ban, schützt SSH und Apache/Moodle, prüft die Konfiguration und aktiviert den Dienst erst danach.
 
-Wichtig:
+## Wichtig
 
 - `nftables` muss auf dem Zielserver bereits vorhanden sein.
 - Wenn `nft` fehlt, bricht die Rolle vor Änderungen ab.
@@ -35,7 +35,7 @@ install_fail2ban/
 │   ├── handlers/main.yml
 │   ├── meta/main.yml
 │   ├── tasks/main.yml
-│   └── templates/99-apache-moodle-bots.local.j2
+│   └── templates/
 └── tests/
     ├── inventory.ini
     └── syntax.yml
@@ -68,18 +68,29 @@ Produktiv ausführen:
 ansible-playbook -i inventories/example/hosts.ini playbooks/install_fail2ban.yml
 ```
 
-## Wichtige Variablen
+## Konkrete Jail-Empfehlung
 
-```yaml
-install_fail2ban_access_log: /var/log/apache2/*access.log
-install_fail2ban_error_log: /var/log/apache2/*error.log
+Standardmäßig aktiv:
 
-install_fail2ban_sshd_enabled: true
-install_fail2ban_sshd_backend: systemd
+- `sshd`: SSH-Bruteforce-Schutz, konservativ und progressiv
+- `apache-malicious-paths`: eindeutige Exploit-/Fremdsystem-Pfade, sofort permanent
+- `apache-scanner-useragents`: explizit benannte Scanner, sofort permanent
+- `apache-scanburst`: viele 400/403/404/405/408/414 in kurzer Zeit, temporär und progressiv
+- `apache-overflows`: eingebauter Apache-Overflow-Filter, permanent nach zwei Treffern
+- `apache-shellshock`: eingebauter Shellshock-Filter, sofort permanent
+- `recidive`: Wiederholungstäter, permanent auf allen Ports
 
-install_fail2ban_run_nft_test_ban: true
-install_fail2ban_test_ban_ip: 192.0.2.123
-```
+Vorbereitet, aber default `false`:
+
+- `apache-auth`: nur Apache Basic/Digest Auth, nicht Moodle-Formularlogin
+- `apache-badbots`: breite User-Agent-Liste, erst gegen echte Logs prüfen
+- `apache-botsearch`: kann sich mit eigenen Pfadfiltern überschneiden, erst gegen echte Logs prüfen
+
+Bewusst nicht eingebaut:
+
+- `apache-fakegooglebot`: DNS-abhängig und unnötig komplex
+- `apache-noscript`: für PHP/Moodle schnell zu breit
+- `apache-modsecurity*`: ModSecurity ist nicht Teil dieser Rolle
 
 ## IP-Whitelisting
 
@@ -106,31 +117,67 @@ Die Rolle rendert daraus je Jail:
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55 198.51.100.0/24
 ```
 
-Hinweis: Keine großen privaten Netze wie `10.0.0.0/8` pauschal freistellen, wenn dort nicht wirklich alle Quellen vertrauenswürdig sind.
+Keine großen privaten Netze wie `10.0.0.0/8` pauschal freistellen, wenn dort nicht wirklich alle Quellen vertrauenswürdig sind.
 
-## Jails
+## Whitelist aus nftables importieren
 
-Aktivierte Standard-Jails:
+Kurzfassung: Ja, technisch möglich — aber nur sicher, wenn die Sets eindeutig als Allow-/Monitoring-/Management-Sets benannt sind.
 
-- `sshd`: SSH-Bruteforce-Schutz, konservativ und progressiv
-- `apache-malicious-paths`: eindeutige Exploit-/Fremdsystem-Pfade, sofort permanent
-- `apache-scanner-useragents`: explizit benannte Scanner, sofort permanent
-- `apache-scanburst`: viele 400/403/404/405/408/414 in kurzer Zeit, temporär und progressiv
-- `apache-overflows`: mitgelieferter Apache-Overflow-Filter, permanent nach zwei Treffern
-- `apache-shellshock`: mitgelieferter Shellshock-Filter, sofort permanent
-- `recidive`: Wiederholungstäter, permanent auf allen Ports
+Die Rolle liest nicht blind alle IPs aus dem nftables-Ruleset aus. In nftables können erlaubte IPs, Blocklisten, Fail2Ban-Sets und Routing-/Policy-Sets gleichzeitig stehen. Ein pauschaler Import könnte versehentlich Angreifer whitelisten.
 
-Optional vorhanden, aber absichtlich deaktiviert:
+Deshalb ist der Import opt-in und auf Set-Namen beschränkt:
 
-- `apache-auth`: nur Apache Basic/Digest Auth, nicht Moodle-Formularlogin
-- `apache-badbots`: breite User-Agent-Liste, erst gegen reale Logs prüfen
-- `apache-botsearch`: kann sich mit eigenen Pfadfiltern überschneiden, erst gegen reale Logs prüfen
+```yaml
+install_fail2ban_nft_whitelist_import_enabled: true
+install_fail2ban_nft_whitelist_set_names:
+  - monitoring_ips
+  - management_ips
+  - mgmt_ips
+  - admin_ips
+  - trusted_ips
+  - fail2ban_ignore
+```
 
-Alle Jails nutzen nftables-Actions. `recidive` sperrt Wiederholungstäter dauerhaft auf allen Ports.
+Die Rolle führt dann `nft -j list ruleset` aus, liest nur diese Sets aus und übernimmt gültige IP-/CIDR-Einträge in `ignoreip`.
+
+Empfehlung: Wenn möglich ein eigenes nftables-Set für Fail2Ban-Ausnahmen pflegen, z.B. `fail2ban_ignore`.
+
+## Scanner-User-Agent-Liste erweitern
+
+Der eigene Filter `apache-scanner-useragents` ist jetzt templated und über Variablen steuerbar.
+
+Basisliste:
+
+```yaml
+install_fail2ban_scanner_useragents:
+  - sqlmap
+  - nikto
+  - nuclei
+  - wpscan
+  - gobuster
+  - ffuf
+```
+
+Zusätzliche lokale Scanner ergänzen:
+
+```yaml
+install_fail2ban_scanner_useragents_extra:
+  - eigener-scanner-name
+  - CompanySecurityScanner
+```
+
+Bestimmte autorisierte User-Agents trotz Match ignorieren:
+
+```yaml
+install_fail2ban_scanner_useragents_ignore:
+  - CompanySecurityScanner
+```
+
+Die Einträge werden als Literale behandelt und im Template regex-escaped. Generische Clients wie `curl`, `wget`, `python-requests` oder `Go-http-client` sind absichtlich nicht enthalten.
 
 ## Jail-Tuning
 
-Die wichtigsten Werte sind einzeln überschreibbar:
+Wichtige Werte sind einzeln überschreibbar:
 
 ```yaml
 install_fail2ban_sshd_enabled: true
@@ -157,7 +204,14 @@ install_fail2ban_recidive_findtime: 7d
 install_fail2ban_recidive_bantime: -1
 ```
 
-Optionales Jail aktivieren:
+Wenn SSH nicht über systemd-journal, sondern über `/var/log/auth.log` ausgewertet werden soll:
+
+```yaml
+install_fail2ban_sshd_backend: auto
+install_fail2ban_sshd_logpath: /var/log/auth.log
+```
+
+Optionales Apache-Auth-Jail aktivieren:
 
 ```yaml
 install_fail2ban_apache_auth_enabled: true
@@ -166,23 +220,40 @@ install_fail2ban_apache_auth_findtime: 10m
 install_fail2ban_apache_auth_bantime: 1d
 ```
 
-Wenn ein Zielserver SSH nicht über systemd-journal, sondern nur über `/var/log/auth.log` auswerten soll:
-
-```yaml
-install_fail2ban_sshd_backend: auto
-install_fail2ban_sshd_logpath: /var/log/auth.log
-```
-
 ## Idempotenz und Aktivierungsreihenfolge
 
 Die Rolle kann mehrfach laufen:
 
 - Paketinstallation, Verzeichnisse, Dateien und Templates sind idempotent.
 - Das initiale Backup wird nur einmal erstellt und über `install_fail2ban_backup_marker` markiert.
+- Aktivierte eingebaute Filter werden vor dem Rendern geprüft.
 - `fail2ban-client -t` läuft nach dem Rendern der verwalteten Dateien.
 - Fail2Ban wird erst nach erfolgreicher Prüfung gestartet bzw. aktiviert.
 - Ein Restart passiert nur, wenn verwaltete Konfigurationsdateien wirklich geändert wurden.
 - Wenn die Prüfung fehlschlägt, wird nicht aktiviert/restarted.
+
+## Aktive Konfiguration nur auslesen
+
+Für eine reine Bestandsaufnahme ohne Installation und ohne Dateischreibungen:
+
+```bash
+ansible-playbook -i inventories/example/hosts.ini playbooks/install_fail2ban.yml \
+  -e install_fail2ban_report_only=true
+```
+
+Dabei werden ausgeführt:
+
+- `fail2ban-client status`
+- `fail2ban-client -d`
+
+Danach beendet die Rolle den Host per `meta: end_host`. Es wird nichts installiert und keine verwaltete Datei geschrieben.
+
+Optional vor und/oder nach einem normalen Lauf reporten:
+
+```yaml
+install_fail2ban_report_before: true
+install_fail2ban_report_after: true
+```
 
 ## Abbruchbedingungen
 
@@ -193,20 +264,19 @@ Die Rolle bricht ab, wenn:
 - `nft` nicht an einem üblichen Systempfad vorhanden ist
 - `/var/log/apache2` fehlt, solange `install_fail2ban_require_apache_log_dir: true` gesetzt ist
 - Whitelist-Einträge nicht wie IPs oder CIDRs aussehen
+- ein aktivierter eingebauter Fail2Ban-Filter auf dem Zielsystem fehlt
 - `fail2ban-client -t` nach dem Rendern fehlschlägt
 - der Dienst nach Aktivierung nicht aktiv ist
 
 ## Rollback
 
-Die Rolle erstellt vor Änderungen an `/etc/fail2ban` optional ein Backup:
+Die Rolle erstellt vor Änderungen an `/etc/fail2ban` optional ein initiales Backup:
 
 ```yaml
 install_fail2ban_backup_existing_config: true
 install_fail2ban_backup_dir: /root/fail2ban-backup
 install_fail2ban_backup_marker: /root/fail2ban-backup/.install_fail2ban_initial_backup_done
 ```
-
-Das Backup ist bewusst ein initiales Sicherheitsbackup. Es wird bei weiteren idempotenten Läufen nicht jedes Mal neu erzeugt.
 
 Manuell zurückrollen:
 
