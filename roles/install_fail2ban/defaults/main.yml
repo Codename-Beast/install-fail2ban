@@ -1,27 +1,63 @@
 ---
+install_fail2ban_role_version: "0.2.0"
+
+# install_fail2ban — Defaults
+#
+# Security model:
+#   - nftables must already exist on the target host.
+#   - The role installs Fail2Ban only, not nftables.
+#   - Existing non-managed Fail2Ban jails are not changed globally.
+#   - Whitelisting is mapped to Fail2Ban ignoreip per managed jail.
+
+# -- Packages ------------------------------------------------------
 install_fail2ban_packages:
   - fail2ban
 
+# -- Preflight -----------------------------------------------------
 install_fail2ban_require_nftables: true
 install_fail2ban_require_apache_log_dir: true
 install_fail2ban_apache_log_dir: /var/log/apache2
 
+# -- Backup --------------------------------------------------------
 install_fail2ban_backup_existing_config: true
 install_fail2ban_backup_dir: /root/fail2ban-backup
 
+# -- IP Whitelist --------------------------------------------------
+# Base entries are always protected from managed Fail2Ban jails.
+install_fail2ban_base_ignoreip:
+  - 127.0.0.1/8
+  - "::1"
+
+# Backward-compatible alias. If you already used install_fail2ban_ignoreip,
+# it is still consumed by the template.
 install_fail2ban_ignoreip:
   - 127.0.0.1/8
   - "::1"
 
+# Additional customer/ops whitelist. Add management VPN, monitoring,
+# authorised scanners or static admin IPs here. Avoid broad private networks
+# unless every source in that network is trusted.
+install_fail2ban_ip_whitelist_enabled: true
+install_fail2ban_allowed_ips: []
+# Example:
+# install_fail2ban_allowed_ips:
+#   - 203.0.113.55
+#   - 198.51.100.0/24
+
+# -- Log paths -----------------------------------------------------
+# Active logs only. Do not use *access.log* because that also catches rotated logs.
 install_fail2ban_access_log: /var/log/apache2/*access.log
 install_fail2ban_error_log: /var/log/apache2/*error.log
 
+# -- Fail2Ban action defaults -------------------------------------
 install_fail2ban_banaction: nftables
 install_fail2ban_banaction_allports: "nftables[type=allports]"
 install_fail2ban_backend: auto
 install_fail2ban_usedns: "no"
 install_fail2ban_ignoreself: true
 
+# -- Managed jail enablement --------------------------------------
+# High-confidence default jails. These are active by default.
 install_fail2ban_malicious_paths_enabled: true
 install_fail2ban_scanner_useragents_enabled: true
 install_fail2ban_scanburst_enabled: true
@@ -29,16 +65,57 @@ install_fail2ban_overflows_enabled: true
 install_fail2ban_shellshock_enabled: true
 install_fail2ban_recidive_enabled: true
 
+# Optional built-in Apache jails. Disabled by default to avoid false positives.
+install_fail2ban_apache_auth_enabled: false
+install_fail2ban_apache_badbots_enabled: false
+install_fail2ban_apache_botsearch_enabled: false
+
+# -- High-confidence permanent bans -------------------------------
+install_fail2ban_malicious_paths_maxretry: 1
+install_fail2ban_malicious_paths_findtime: 1d
+install_fail2ban_malicious_paths_bantime: -1
+
+install_fail2ban_scanner_useragents_maxretry: 1
+install_fail2ban_scanner_useragents_findtime: 1d
+install_fail2ban_scanner_useragents_bantime: -1
+
+install_fail2ban_overflows_maxretry: 2
+install_fail2ban_overflows_findtime: 1d
+install_fail2ban_overflows_bantime: -1
+
+install_fail2ban_shellshock_maxretry: 1
+install_fail2ban_shellshock_findtime: 1d
+install_fail2ban_shellshock_bantime: -1
+
+# -- Behaviour-based scanburst ------------------------------------
+# Conservative default for public Moodle systems behind NAT/campus networks.
 install_fail2ban_scanburst_maxretry: 80
 install_fail2ban_scanburst_findtime: 5m
 install_fail2ban_scanburst_bantime: 12h
 install_fail2ban_scanburst_maxtime: 90d
 install_fail2ban_scanburst_multipliers: "1 2 6 14 60 180"
+install_fail2ban_scanburst_rndtime: 10m
+install_fail2ban_scanburst_overalljails: false
 
+# -- Optional built-ins -------------------------------------------
+install_fail2ban_apache_auth_maxretry: 5
+install_fail2ban_apache_auth_findtime: 10m
+install_fail2ban_apache_auth_bantime: 1d
+
+install_fail2ban_apache_badbots_maxretry: 1
+install_fail2ban_apache_badbots_findtime: 1d
+install_fail2ban_apache_badbots_bantime: 1d
+
+install_fail2ban_apache_botsearch_maxretry: 2
+install_fail2ban_apache_botsearch_findtime: 1d
+install_fail2ban_apache_botsearch_bantime: 1d
+
+# -- Recidive ------------------------------------------------------
 install_fail2ban_recidive_maxretry: 3
 install_fail2ban_recidive_findtime: 7d
 install_fail2ban_recidive_bantime: -1
 
+# -- Verification -------------------------------------------------
 install_fail2ban_run_filter_smoke_tests: true
 install_fail2ban_run_nft_test_ban: true
 install_fail2ban_test_ban_ip: 192.0.2.123
