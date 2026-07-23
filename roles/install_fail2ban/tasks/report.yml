@@ -1,0 +1,96 @@
+---
+- name: "Report | collect service facts"
+  service_facts:
+
+- name: "Report | read Fail2Ban status"
+  command:
+    cmd: fail2ban-client status
+  register: install_fail2ban_report_status
+  changed_when: false
+  failed_when: false
+
+- name: "Report | parse active jails"
+  set_fact:
+    install_fail2ban_report_jails: >-
+      {{
+        (
+          install_fail2ban_report_status.stdout_lines
+          | default([])
+          | select('search', 'Jail list:')
+          | list
+          | first
+          | default('')
+          | regex_replace('^.*Jail list:\s*', '')
+        )
+        | split(',')
+        | map('trim')
+        | reject('equalto', '')
+        | list
+      }}
+
+- name: "Report | read jail details"
+  command:
+    cmd: "fail2ban-client status {{ item }}"
+  loop: "{{ install_fail2ban_report_jails }}"
+  register: install_fail2ban_report_jail_status
+  changed_when: false
+  failed_when: false
+  when: install_fail2ban_report_status.rc == 0
+
+- name: "Report | show summary"
+  debug:
+    msg:
+      - "================================================================"
+      - "{{ install_fail2ban_report_title | default('Fail2Ban status') }}"
+      - "----------------------------------------------------------------"
+      - "Host: {{ inventory_hostname }}"
+      - "Service state: {{ ansible_facts.services['fail2ban.service'].state | default('not found') }}"
+      - "Service status: {{ ansible_facts.services['fail2ban.service'].status | default('not found') }}"
+      - "fail2ban-client rc: {{ install_fail2ban_report_status.rc }}"
+      - "Active jails: {{ install_fail2ban_report_jails | length }}"
+      - "Jail list: {{ (install_fail2ban_report_jails | length > 0) | ternary(install_fail2ban_report_jails | join(', '), '-') }}"
+      - "================================================================"
+
+- name: "Report | show unavailable details"
+  debug:
+    msg:
+      - "Fail2Ban status is not available."
+      - "stdout: {{ install_fail2ban_report_status.stdout_lines | default([]) }}"
+      - "stderr: {{ install_fail2ban_report_status.stderr_lines | default([]) }}"
+  when: install_fail2ban_report_status.rc != 0
+
+- name: "Report | show empty jail list"
+  debug:
+    msg: "No active Fail2Ban jails reported."
+  when:
+    - install_fail2ban_report_status.rc == 0
+    - install_fail2ban_report_jails | length == 0
+
+- name: "Report | show jail ban counters"
+  debug:
+    msg: >-
+      {{ '%-32s current=%-6s total=%-6s filter=%s' | format(
+        item.item,
+        install_fail2ban_report_current_banned,
+        install_fail2ban_report_total_banned,
+        item.item
+      ) }}
+  vars:
+    install_fail2ban_report_current_banned: >-
+      {{
+        (item.stdout_lines | default([]) | select('search', 'Currently banned:') | list | first | default('Currently banned: n/a'))
+        | regex_replace('^.*Currently banned:\s*', '')
+        | trim
+      }}
+    install_fail2ban_report_total_banned: >-
+      {{
+        (item.stdout_lines | default([]) | select('search', 'Total banned:') | list | first | default('Total banned: n/a'))
+        | regex_replace('^.*Total banned:\s*', '')
+        | trim
+      }}
+  loop: "{{ install_fail2ban_report_jail_status.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - install_fail2ban_report_status.rc == 0
+    - install_fail2ban_report_jails | length > 0

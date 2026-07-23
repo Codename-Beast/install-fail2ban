@@ -11,7 +11,7 @@ Die Rolle ist absichtlich schlicht gehalten: klare Defaults, keine Magie, keine 
 Inventory anlegen:
 
 ```yaml
-# inventory/hosts.yml
+# inventory/hosts
 fail2ban_targets:
   hosts:
     web01:
@@ -22,24 +22,32 @@ fail2ban_targets:
 Ausführen:
 
 ```bash
-ansible-playbook -i inventory install_fail2ban.yml
+ansible-playbook -i inventory/hosts install_fail2ban.yml
 ```
 
 Nutze die vorhandene zentrale Ansible-Konfiguration der Umgebung.
+
+Weitere Inventories funktionieren genauso:
+
+```bash
+ansible-playbook -i prod install_fail2ban.yml
+ansible-playbook -i hc-moodle install_fail2ban.yml
+ansible-playbook -i . install_fail2ban.yml
+```
 
 
 Anderen Host oder Gruppe wählen:
 
 ```bash
-ansible-playbook -i inventory install_fail2ban.yml -e hosts=web01
-ansible-playbook -i inventory install_fail2ban.yml -e hosts=fail2ban_targets
+ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_hosts=web01
+ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_hosts=fail2ban_targets
 ```
 
 Vorher prüfen:
 
 ```bash
-ansible-playbook -i inventory install_fail2ban.yml --syntax-check
-ansible-playbook -i inventory install_fail2ban.yml --check --diff
+ansible-playbook -i inventory/hosts install_fail2ban.yml --syntax-check
+ansible-playbook -i inventory/hosts install_fail2ban.yml --check --diff
 ```
 
 ---
@@ -55,6 +63,7 @@ ansible-playbook -i inventory install_fail2ban.yml --check --diff
 - prüft die Fail2Ban-Konfiguration mit `fail2ban-client -t`
 - bricht bei ungültiger Konfiguration mit stdout/stderr ab
 - startet oder restartet Fail2Ban erst nach erfolgreicher Prüfung
+- gibt danach Service-Status, aktive Jails und Ban-Zähler aus
 - kann optional den Fail2Ban Prometheus Exporter installieren
 
 ---
@@ -237,24 +246,20 @@ Der Exporter liest den Fail2Ban-Socket `/var/run/fail2ban/fail2ban.sock` und lä
 Für eine reine Bestandsaufnahme ohne Installation und ohne Dateischreibungen:
 
 ```bash
-ansible-playbook -i inventory install_fail2ban.yml -e install_fail2ban_report_only=true
+ansible-playbook -i inventory/hosts install_fail2ban.yml -e install_fail2ban_report_only=true
 ```
 
-Dabei werden nur diese Befehle ausgeführt:
+Dabei werden nur Statusdaten gelesen:
 
-```bash
-fail2ban-client status
-fail2ban-client -d
+```text
+Service state/status
+Active jail count
+Active jail list
+Currently banned je Jail
+Total banned je Jail
 ```
 
-Danach beendet die Rolle den Host mit `meta: end_host`.
-
-Vor oder nach einem normalen Lauf reporten:
-
-```yaml
-install_fail2ban_report_before: true
-install_fail2ban_report_after: true
-```
+Danach beendet die Rolle den Host mit `meta: end_host`. Nach erfolgreicher Installation wird derselbe Bericht automatisch ausgegeben.
 
 ---
 
@@ -266,7 +271,7 @@ Die Rolle kann mehrfach laufen:
 - das initiale Backup wird nur einmal erstellt
 - `fail2ban-client -t` läuft vor Start/Restart
 - Restart passiert nur bei geänderter verwalteter Konfiguration
-- ein optionaler nft-Test-Ban ist möglich, aber standardmäßig aus
+
 
 ---
 

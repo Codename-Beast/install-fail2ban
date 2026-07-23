@@ -7,31 +7,10 @@
 # 5. Test the configuration.
 # 6. Start, enable, or restart services only after validation.
 
-- name: "Report | read Fail2Ban status"
-  command:
-    cmd: fail2ban-client status
-  register: install_fail2ban_report_only_status
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_only | bool
-
-- name: "Report | dump Fail2Ban config"
-  command:
-    cmd: fail2ban-client -d
-  register: install_fail2ban_report_only_dump
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_only | bool
-
-- name: "Report | show read-only result"
-  debug:
-    msg:
-      - "Fail2Ban status rc={{ install_fail2ban_report_only_status.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_only_status.stdout_lines | default([]) }}"
-      - "Fail2Ban config dump rc={{ install_fail2ban_report_only_dump.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_only_dump.stdout_lines | default([]) }}"
-      - "{{ install_fail2ban_report_only_status.stderr_lines | default([]) }}"
-      - "{{ install_fail2ban_report_only_dump.stderr_lines | default([]) }}"
+- name: "Report | show current Fail2Ban state"
+  include_tasks: report.yml
+  vars:
+    install_fail2ban_report_title: "Fail2Ban status before changes"
   when: install_fail2ban_report_only | bool
 
 - name: "Report | stop read-only run"
@@ -181,33 +160,6 @@
       - item is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
     fail_msg: "install_fail2ban: invalid final whitelist entry '{{ item }}'."
   loop: "{{ install_fail2ban_effective_ignoreip }}"
-
-- name: "Report | read status before changes"
-  command:
-    cmd: fail2ban-client status
-  register: install_fail2ban_report_before_status
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_before | bool
-
-- name: "Report | dump config before changes"
-  command:
-    cmd: fail2ban-client -d
-  register: install_fail2ban_report_before_dump
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_before | bool
-
-- name: "Report | show before report"
-  debug:
-    msg:
-      - "Fail2Ban status rc={{ install_fail2ban_report_before_status.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_before_status.stdout_lines | default([]) }}"
-      - "Fail2Ban config dump rc={{ install_fail2ban_report_before_dump.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_before_dump.stdout_lines | default([]) }}"
-      - "{{ install_fail2ban_report_before_status.stderr_lines | default([]) }}"
-      - "{{ install_fail2ban_report_before_dump.stderr_lines | default([]) }}"
-  when: install_fail2ban_report_before | bool
 
 - name: "Setup | install Fail2Ban"
   apt:
@@ -446,71 +398,7 @@
     success_msg: "Fail2Ban exporter exposes metrics."
   when: install_fail2ban_exporter_enabled | bool
 
-
-- name: "Verify | collect service facts"
-  service_facts:
-
-- name: "Verify | check running service"
-  assert:
-    that:
-      - ansible_facts.services['fail2ban.service'].state == 'running'
-    fail_msg: "Fail2Ban is not running after activation."
-    success_msg: "Fail2Ban is running."
-
-- name: "Verify | list loaded jails"
-  command:
-    cmd: fail2ban-client status
-  register: install_fail2ban_status
-  changed_when: false
-
-- name: "Verify | show Fail2Ban status"
-  debug:
-    var: install_fail2ban_status.stdout_lines
-
-- name: "Verify | test nft ban action"
-  when: install_fail2ban_run_nft_test_ban | bool
-  block:
-    - name: "Verify | ban test IP"
-      command:
-        cmd: "fail2ban-client set apache-malicious-paths banip {{ install_fail2ban_test_ban_ip }}"
-      changed_when: false
-
-    - name: "Verify | check test IP in nft"
-      command:
-        cmd: nft list ruleset
-      register: install_fail2ban_nft_ruleset
-      changed_when: false
-      failed_when: install_fail2ban_test_ban_ip not in install_fail2ban_nft_ruleset.stdout
-  always:
-    - name: "Verify | unban test IP"
-      command:
-        cmd: "fail2ban-client set apache-malicious-paths unbanip {{ install_fail2ban_test_ban_ip }}"
-      changed_when: false
-      failed_when: false
-
-- name: "Report | read status after changes"
-  command:
-    cmd: fail2ban-client status
-  register: install_fail2ban_report_after_status
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_after | bool
-
-- name: "Report | dump config after changes"
-  command:
-    cmd: fail2ban-client -d
-  register: install_fail2ban_report_after_dump
-  changed_when: false
-  failed_when: false
-  when: install_fail2ban_report_after | bool
-
-- name: "Report | show after report"
-  debug:
-    msg:
-      - "Fail2Ban status rc={{ install_fail2ban_report_after_status.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_after_status.stdout_lines | default([]) }}"
-      - "Fail2Ban config dump rc={{ install_fail2ban_report_after_dump.rc | default('n/a') }}"
-      - "{{ install_fail2ban_report_after_dump.stdout_lines | default([]) }}"
-      - "{{ install_fail2ban_report_after_status.stderr_lines | default([]) }}"
-      - "{{ install_fail2ban_report_after_dump.stderr_lines | default([]) }}"
-  when: install_fail2ban_report_after | bool
+- name: "Report | show final Fail2Ban state"
+  include_tasks: report.yml
+  vars:
+    install_fail2ban_report_title: "Fail2Ban status after successful installation"

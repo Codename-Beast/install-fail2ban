@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.9.0"
+install_fail2ban_role_version: "1.0.0"
 
 # install_fail2ban defaults
 #
@@ -200,9 +200,3 @@ install_fail2ban_require_trusted_whitelist_for_sshd: true
 # -- Reporting / read-only mode ------------------------------------
 # report_only reads the current Fail2Ban status/config and stops without writes.
 install_fail2ban_report_only: false
-install_fail2ban_report_before: false
-install_fail2ban_report_after: false
-
-# -- Verification --------------------------------------------------
-install_fail2ban_run_nft_test_ban: false
-install_fail2ban_test_ban_ip: 192.0.2.123
