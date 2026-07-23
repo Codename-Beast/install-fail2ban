@@ -8,7 +8,7 @@
 # 6. erst danach Dienst starten/aktivieren/restarten.
 
 - name: "Report | read Fail2Ban status"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client status
   register: install_fail2ban_report_only_status
   changed_when: false
@@ -16,7 +16,7 @@
   when: install_fail2ban_report_only | bool
 
 - name: "Report | dump Fail2Ban config"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client -d
   register: install_fail2ban_report_only_dump
   changed_when: false
@@ -24,7 +24,7 @@
   when: install_fail2ban_report_only | bool
 
 - name: "Report | show read-only result"
-  debug:  # noqa: fqcn[action-core]
+  debug:
     msg:
       - "Fail2Ban status rc={{ install_fail2ban_report_only_status.rc | default('n/a') }}"
       - "{{ install_fail2ban_report_only_status.stdout_lines | default([]) }}"
@@ -35,11 +35,11 @@
   when: install_fail2ban_report_only | bool
 
 - name: "Report | stop read-only run"
-  ansible.builtin.meta: end_host
+  meta: end_host
   when: install_fail2ban_report_only | bool
 
 - name: "Preflight | check supported OS"
-  ansible.builtin.assert:
+  assert:
     that:
       - ansible_os_family == 'Debian'
       - ansible_distribution in ['Debian', 'Ubuntu']
@@ -49,31 +49,31 @@
     success_msg: "Unterstütztes System erkannt: {{ ansible_distribution }} {{ ansible_distribution_version }}"
 
 - name: "Preflight | check Ansible version"
-  ansible.builtin.assert:
+  assert:
     that: "ansible_version.full is version('2.10', '>=')"
     fail_msg: "install_fail2ban benötigt Ansible >= 2.10 (gefunden: {{ ansible_version.full }})"
 
 - name: "Preflight | check explicit whitelist"
-  ansible.builtin.assert:
+  assert:
     that:
       - item is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
     fail_msg: "install_fail2ban: ungültiger Whitelist-Eintrag '{{ item }}'. Bitte IP oder CIDR nutzen."
-  loop: "{{ (install_fail2ban_ignoreip | default([])) + (install_fail2ban_admin_ips | default([])) + (install_fail2ban_allowed_ips | default([])) }}"
+  loop: "{{ (install_fail2ban_ignoreip | default([])) + (install_fail2ban_trusted_ips | default([])) + (install_fail2ban_allowed_ips | default([])) }}"
   when: install_fail2ban_ip_whitelist_enabled | bool
 
-- name: "Preflight | require admin SSH whitelist"
-  ansible.builtin.assert:
+- name: "Preflight | require trusted SSH whitelist"
+  assert:
     that:
-      - (install_fail2ban_admin_ips | default([])) | length > 0
+      - (install_fail2ban_trusted_ips | default([])) | length > 0
     fail_msg: >-
-      install_fail2ban: sshd ist aktiv, aber install_fail2ban_admin_ips ist leer.
-      Trage Admin-/VPN-/Jump-Host-IPs ein, damit Admins nicht ausgesperrt werden.
+      install_fail2ban: sshd ist aktiv, aber install_fail2ban_trusted_ips ist leer.
+      Trage die gemeinsame VPN- oder Jump-Host-IP ein, damit berechtigte SSH-Key-Logins nicht ausgesperrt werden.
   when:
     - install_fail2ban_sshd_enabled | bool
-    - install_fail2ban_require_admin_whitelist_for_sshd | bool
+    - install_fail2ban_require_trusted_whitelist_for_sshd | bool
 
 - name: "Preflight | find nft binary"
-  ansible.builtin.stat:
+  stat:
     path: "{{ item }}"
   loop:
     - /usr/sbin/nft
@@ -83,7 +83,7 @@
   register: install_fail2ban_nft_command_stats
 
 - name: "Preflight | require nftables"
-  ansible.builtin.fail:
+  fail:
     msg: >-
       Abbruch: nftables/nft ist auf dem Zielserver nicht vorhanden. Die Rolle installiert nftables bewusst nicht automatisch.
       Bitte nftables vorbereiten und erneut starten.
@@ -92,12 +92,12 @@
     - not (install_fail2ban_nft_command_stats.results | selectattr('stat.exists') | list | length > 0)
 
 - name: "Preflight | check Apache log dir"
-  ansible.builtin.stat:
+  stat:
     path: "{{ install_fail2ban_apache_log_dir }}"
   register: install_fail2ban_apache_log_dir_stat
 
 - name: "Preflight | require Apache log dir"
-  ansible.builtin.fail:
+  fail:
     msg: >-
       Abbruch: {{ install_fail2ban_apache_log_dir }} fehlt. Die Standardkonfiguration erwartet
       dateibasierte Apache-Logs. Setze install_fail2ban_require_apache_log_dir: false nur bewusst.
@@ -106,7 +106,7 @@
     - not install_fail2ban_apache_log_dir_stat.stat.exists
 
 - name: "Preflight | import nft whitelist sets"
-  ansible.builtin.shell: |
+  shell: |
     set -euo pipefail
     python3 - <<'PY'
     import json
@@ -148,26 +148,26 @@
   when: install_fail2ban_nft_whitelist_import_enabled | bool
 
 - name: "Preflight | build effective whitelist"
-  ansible.builtin.set_fact:
+  set_fact:
     install_fail2ban_effective_ignoreip: >-
       {{
         (
           (install_fail2ban_ignoreip | default(install_fail2ban_base_ignoreip))
-          + ((install_fail2ban_admin_ips | default([])) if (install_fail2ban_ip_whitelist_enabled | bool) else [])
+          + ((install_fail2ban_trusted_ips | default([])) if (install_fail2ban_ip_whitelist_enabled | bool) else [])
           + ((install_fail2ban_allowed_ips | default([])) if (install_fail2ban_ip_whitelist_enabled | bool) else [])
           + (install_fail2ban_nft_whitelist_import.stdout_lines | default([]))
         ) | unique | list
       }}
 
 - name: "Preflight | validate effective whitelist"
-  ansible.builtin.assert:
+  assert:
     that:
       - item is match('^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^::1$|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$')
     fail_msg: "install_fail2ban: ungültiger finaler Whitelist-Eintrag '{{ item }}'."
   loop: "{{ install_fail2ban_effective_ignoreip }}"
 
 - name: "Report | read status before changes"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client status
   register: install_fail2ban_report_before_status
   changed_when: false
@@ -175,7 +175,7 @@
   when: install_fail2ban_report_before | bool
 
 - name: "Report | dump config before changes"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client -d
   register: install_fail2ban_report_before_dump
   changed_when: false
@@ -183,7 +183,7 @@
   when: install_fail2ban_report_before | bool
 
 - name: "Report | show before report"
-  debug:  # noqa: fqcn[action-core]
+  debug:
     msg:
       - "Fail2Ban status rc={{ install_fail2ban_report_before_status.rc | default('n/a') }}"
       - "{{ install_fail2ban_report_before_status.stdout_lines | default([]) }}"
@@ -194,14 +194,14 @@
   when: install_fail2ban_report_before | bool
 
 - name: "Setup | install Fail2Ban"
-  ansible.builtin.apt:
+  apt:
     name: "{{ install_fail2ban_packages }}"
     state: present
     update_cache: true
     cache_valid_time: 3600
 
 - name: "Backup | create backup dir"
-  ansible.builtin.file:
+  file:
     path: "{{ install_fail2ban_backup_dir }}"
     state: directory
     owner: root
@@ -210,18 +210,18 @@
   when: install_fail2ban_backup_existing_config | bool
 
 - name: "Backup | check existing config"
-  ansible.builtin.stat:
+  stat:
     path: /etc/fail2ban
   register: install_fail2ban_etc_stat
 
 - name: "Backup | check initial marker"
-  ansible.builtin.stat:
+  stat:
     path: "{{ install_fail2ban_backup_marker }}"
   register: install_fail2ban_backup_marker_stat
   when: install_fail2ban_backup_existing_config | bool
 
 - name: "Backup | create initial backup"
-  ansible.builtin.command:
+  command:
     cmd: "tar --create --gzip --file={{ install_fail2ban_backup_dir }}/fail2ban-{{ ansible_date_time.iso8601_basic_short }}.tar.gz /etc/fail2ban"
   changed_when: true
   # noqa: command-instead-of-module
@@ -231,7 +231,7 @@
     - not (install_fail2ban_backup_marker_stat.stat.exists | default(false))
 
 - name: "Backup | write initial marker"
-  ansible.builtin.copy:
+  copy:
     dest: "{{ install_fail2ban_backup_marker }}"
     owner: root
     group: root
@@ -246,7 +246,7 @@
     - not (install_fail2ban_backup_marker_stat.stat.exists | default(false))
 
 - name: "Config | create config dirs"
-  ansible.builtin.file:
+  file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -258,7 +258,7 @@
     - /etc/fail2ban/jail.d
 
 - name: "Config | check built-in filters"
-  ansible.builtin.stat:
+  stat:
     path: "/etc/fail2ban/filter.d/{{ item.name }}.conf"
   loop:
     - { name: "sshd", enabled: "{{ install_fail2ban_sshd_enabled }}" }
@@ -273,7 +273,7 @@
     label: "{{ item.name }}"
 
 - name: "Config | require enabled filters"
-  ansible.builtin.assert:
+  assert:
     that:
       - (not (item.item.enabled | bool)) or item.stat.exists
     fail_msg: >-
@@ -284,7 +284,7 @@
     label: "{{ item.item.name }}"
 
 - name: "Config | install daemon config"
-  ansible.builtin.copy:
+  copy:
     src: 99-web-protection.local
     dest: /etc/fail2ban/fail2ban.d/99-web-protection.local
     owner: root
@@ -293,7 +293,7 @@
   register: install_fail2ban_daemon_config
 
 - name: "Config | install static filters"
-  ansible.builtin.copy:
+  copy:
     src: "{{ item }}"
     dest: "/etc/fail2ban/filter.d/{{ item }}"
     owner: root
@@ -305,7 +305,7 @@
   register: install_fail2ban_static_filter_config
 
 - name: "Config | render scanner filter"
-  ansible.builtin.template:
+  template:
     src: apache-scanner-useragents.conf.j2
     dest: /etc/fail2ban/filter.d/apache-scanner-useragents.conf
     owner: root
@@ -314,7 +314,7 @@
   register: install_fail2ban_scanner_filter_config
 
 - name: "Config | render jails"
-  ansible.builtin.template:
+  template:
     src: 99-apache-moodle-bots.local.j2
     dest: /etc/fail2ban/jail.d/99-apache-moodle-bots.local
     owner: root
@@ -323,12 +323,12 @@
   register: install_fail2ban_jail_config
 
 - name: "Verify | test Fail2Ban config"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client -t
   changed_when: false
 
 - name: "Verify | test malicious path regex"
-  ansible.builtin.shell: |
+  shell: |
     set -euo pipefail
     tmpfile="$(mktemp)"
     trap 'rm -f "$tmpfile"' EXIT
@@ -343,7 +343,7 @@
   when: install_fail2ban_run_filter_smoke_tests | bool
 
 - name: "Verify | test scanner regex"
-  ansible.builtin.shell: |
+  shell: |
     set -euo pipefail
     tmpfile="$(mktemp)"
     trap 'rm -f "$tmpfile"' EXIT
@@ -358,13 +358,13 @@
   when: install_fail2ban_run_filter_smoke_tests | bool
 
 - name: "Service | start and enable Fail2Ban"
-  ansible.builtin.service:
+  service:
     name: fail2ban
     state: started
     enabled: true
 
 - name: "Service | restart on config change"
-  ansible.builtin.service:
+  service:
     name: fail2ban
     state: restarted
     enabled: true
@@ -375,7 +375,7 @@
     install_fail2ban_jail_config.changed
 
 - name: "Monitoring | create exporter source dir"
-  ansible.builtin.file:
+  file:
     path: "{{ install_fail2ban_exporter_src_dir }}"
     state: directory
     owner: root
@@ -384,7 +384,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | download Fail2Ban exporter"
-  ansible.builtin.get_url:
+  get_url:
     url: "{{ install_fail2ban_exporter_archive_url }}"
     dest: "{{ install_fail2ban_exporter_src_dir }}/fail2ban_exporter_{{ install_fail2ban_exporter_version }}_{{ install_fail2ban_exporter_arch }}.tar.gz"
     checksum: "{{ install_fail2ban_exporter_archive_checksum }}"
@@ -395,7 +395,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | unpack Fail2Ban exporter"
-  ansible.builtin.unarchive:
+  unarchive:
     src: "{{ install_fail2ban_exporter_archive.dest }}"
     dest: "{{ install_fail2ban_exporter_src_dir }}"
     remote_src: true
@@ -406,7 +406,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | install Fail2Ban exporter binary"
-  ansible.builtin.copy:
+  copy:
     src: "{{ install_fail2ban_exporter_src_dir }}/fail2ban_exporter"
     dest: "{{ install_fail2ban_exporter_bin_path }}"
     remote_src: true
@@ -417,7 +417,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | install Fail2Ban exporter service"
-  ansible.builtin.template:
+  template:
     src: fail2ban-exporter.service.j2
     dest: "/etc/systemd/system/{{ install_fail2ban_exporter_service_name }}.service"
     owner: root
@@ -427,7 +427,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | start Fail2Ban exporter"
-  ansible.builtin.systemd:
+  systemd:
     name: "{{ install_fail2ban_exporter_service_name }}"
     state: "{{ (install_fail2ban_exporter_binary.changed or install_fail2ban_exporter_service.changed) | ternary('restarted', 'started') }}"
     enabled: true
@@ -435,7 +435,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | check Fail2Ban exporter metrics"
-  ansible.builtin.uri:
+  uri:
     url: "{{ install_fail2ban_exporter_health_url }}"
     return_content: true
     status_code: 200
@@ -444,7 +444,7 @@
   when: install_fail2ban_exporter_enabled | bool
 
 - name: "Monitoring | verify Fail2Ban exporter metrics"
-  ansible.builtin.assert:
+  assert:
     that:
       - "'f2b_up' in install_fail2ban_exporter_metrics.content"
     fail_msg: "install_fail2ban: Fail2Ban exporter liefert keine f2b_up Metrik"
@@ -453,48 +453,48 @@
 
 
 - name: "Verify | collect service facts"
-  ansible.builtin.service_facts:
+  service_facts:
 
 - name: "Verify | check running service"
-  ansible.builtin.assert:
+  assert:
     that:
       - ansible_facts.services['fail2ban.service'].state == 'running'
     fail_msg: "Fail2Ban läuft nach der Aktivierung nicht."
     success_msg: "Fail2Ban läuft."
 
 - name: "Verify | list loaded jails"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client status
   register: install_fail2ban_status
   changed_when: false
 
 - name: "Verify | show Fail2Ban status"
-  debug:  # noqa: fqcn[action-core]
+  debug:
     var: install_fail2ban_status.stdout_lines
 
 - name: "Verify | test nft ban action"
   when: install_fail2ban_run_nft_test_ban | bool
   block:
     - name: "Verify | ban test IP"
-      ansible.builtin.command:
+      command:
         cmd: "fail2ban-client set apache-malicious-paths banip {{ install_fail2ban_test_ban_ip }}"
       changed_when: false
 
     - name: "Verify | check test IP in nft"
-      ansible.builtin.command:
+      command:
         cmd: nft list ruleset
       register: install_fail2ban_nft_ruleset
       changed_when: false
       failed_when: install_fail2ban_test_ban_ip not in install_fail2ban_nft_ruleset.stdout
   always:
     - name: "Verify | unban test IP"
-      ansible.builtin.command:
+      command:
         cmd: "fail2ban-client set apache-malicious-paths unbanip {{ install_fail2ban_test_ban_ip }}"
       changed_when: false
       failed_when: false
 
 - name: "Report | read status after changes"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client status
   register: install_fail2ban_report_after_status
   changed_when: false
@@ -502,7 +502,7 @@
   when: install_fail2ban_report_after | bool
 
 - name: "Report | dump config after changes"
-  ansible.builtin.command:
+  command:
     cmd: fail2ban-client -d
   register: install_fail2ban_report_after_dump
   changed_when: false
@@ -510,7 +510,7 @@
   when: install_fail2ban_report_after | bool
 
 - name: "Report | show after report"
-  debug:  # noqa: fqcn[action-core]
+  debug:
     msg:
       - "Fail2Ban status rc={{ install_fail2ban_report_after_status.rc | default('n/a') }}"
       - "{{ install_fail2ban_report_after_status.stdout_lines | default([]) }}"

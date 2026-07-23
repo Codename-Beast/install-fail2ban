@@ -19,24 +19,24 @@ fail2ban_targets:
       ansible_user: root
 ```
 
-Ausführen wie bei der Solr-Rolle:
+Ausführen:
 
 ```bash
-ansible-playbook -i inventory examples/install_fail2ban.yml
+ansible-playbook -i inventory install_fail2ban.yml
 ```
 
 Anderen Host oder Gruppe wählen:
 
 ```bash
-ansible-playbook -i inventory examples/install_fail2ban.yml -e hosts=web01
-ansible-playbook -i inventory examples/install_fail2ban.yml -e hosts=fail2ban_targets
+ansible-playbook -i inventory install_fail2ban.yml -e hosts=web01
+ansible-playbook -i inventory install_fail2ban.yml -e hosts=fail2ban_targets
 ```
 
 Vorher prüfen:
 
 ```bash
-ansible-playbook -i inventory examples/install_fail2ban.yml --syntax-check
-ansible-playbook -i inventory examples/install_fail2ban.yml --check --diff
+ansible-playbook -i inventory install_fail2ban.yml --syntax-check
+ansible-playbook -i inventory install_fail2ban.yml --check --diff
 ```
 
 ---
@@ -104,19 +104,19 @@ install_fail2ban_base_ignoreip:
   - "::1"
 ```
 
-Admin-Quellen müssen explizit rein. Sonst bricht die Rolle ab, solange `sshd` aktiv ist:
+Die gemeinsame VPN- oder Jump-Host-IP muss explizit rein. Sonst bricht die Rolle ab, solange `sshd` aktiv ist:
 
 ```yaml
-install_fail2ban_admin_ips:
-  - 203.0.113.55        # Admin-VPN oder Jump Host
+install_fail2ban_trusted_ips:
+  - 203.0.113.55        # gemeinsame VPN- oder Jump-Host-IP
 
 install_fail2ban_allowed_ips:
-  - 198.51.100.0/24     # Monitoring-Netz
+  - 198.51.100.0/24     # weiteres Monitoring-Netz
 ```
 
 Die Rolle schreibt die Whitelist je Jail als `ignoreip`. Dadurch werden fremde Fail2Ban-Jails nicht global verändert.
 
-Wichtig: Fail2Ban sperrt IPs, keine SSH-Benutzer. Ein Login per SSH-Key wird nicht gebannt, aber ein Admin kann trotzdem ausgesperrt werden, wenn seine Quell-IP vorher zu viele Fehlversuche erzeugt. Darum gibt es `install_fail2ban_admin_ips`.
+Wichtig: Fail2Ban sperrt IPs, keine SSH-Benutzer. Erfolgreiche SSH-Key-Logins werden vom `sshd`-Filter nicht gebannt. Damit eure gemeinsame VPN-IP trotzdem nie durch Fehlversuche blockiert wird, steht sie in `install_fail2ban_trusted_ips`.
 
 Große Netze nur eintragen, wenn alle Quellen darin wirklich vertrauenswürdig sind.
 
@@ -131,7 +131,6 @@ install_fail2ban_nft_whitelist_import_enabled: true
 install_fail2ban_nft_whitelist_set_names:
   - monitoring_ips
   - management_ips
-  - admin_ips
   - trusted_ips
   - fail2ban_ignore
 ```
@@ -235,7 +234,7 @@ Der Exporter liest den Fail2Ban-Socket `/var/run/fail2ban/fail2ban.sock` und lä
 Für eine reine Bestandsaufnahme ohne Installation und ohne Dateischreibungen:
 
 ```bash
-ansible-playbook -i inventory examples/install_fail2ban.yml -e install_fail2ban_report_only=true
+ansible-playbook -i inventory install_fail2ban.yml -e install_fail2ban_report_only=true
 ```
 
 Dabei werden nur diese Befehle ausgeführt:

@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.5.0"
+install_fail2ban_role_version: "0.6.0"
 
 # install_fail2ban — Defaults
 #
@@ -39,10 +39,10 @@ install_fail2ban_ignoreip:
   - 127.0.0.1/8
   - "::1"
 
-# Explizite Admin-/Monitoring-/VPN-/Scanner-IPs.
-# Keine großen Netze pauschal freistellen, wenn dort nicht alles vertrauenswürdig ist.
+# Vertrauenswürdige Quell-IPs: VPN, Jump Host, Monitoring.
+# Bei aktivem sshd-Jail muss mindestens die VPN-/Jump-Host-IP gesetzt sein.
 install_fail2ban_ip_whitelist_enabled: true
-install_fail2ban_admin_ips: []
+install_fail2ban_trusted_ips: []
 install_fail2ban_allowed_ips: []
 # Beispiel:
 # install_fail2ban_allowed_ips:
@@ -60,7 +60,6 @@ install_fail2ban_nft_whitelist_set_names:
   - monitoring_ipv6
   - management_ips
   - mgmt_ips
-  - admin_ips
   - trusted_ips
   - fail2ban_ignore
 
@@ -199,8 +198,8 @@ install_fail2ban_exporter_listen_address: "127.0.0.1:9191"
 install_fail2ban_exporter_health_url: "http://127.0.0.1:9191/metrics"
 install_fail2ban_exporter_service_name: fail2ban-exporter
 
-# SSH-Schutz bleibt ausrollsicher: Admin-Quellen müssen explizit freigestellt sein.
-install_fail2ban_require_admin_whitelist_for_sshd: true
+# SSH-Key-Logins laufen über vertrauenswürdige Quell-IPs; diese werden nie gebannt.
+install_fail2ban_require_trusted_whitelist_for_sshd: true
 
 # -- Reporting / Nur-Lesen-Modus ----------------------------------
 # report_only liest die vorhandene aktive/lokale Fail2Ban-Konfiguration aus und
