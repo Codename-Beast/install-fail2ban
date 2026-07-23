@@ -1,0 +1,20 @@
+[Unit]
+Description=Fail2Ban Prometheus Exporter
+Documentation=https://gitlab.com/hctrdev/fail2ban-prometheus-exporter
+After=fail2ban.service
+Requires=fail2ban.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart={{ install_fail2ban_exporter_bin_path }} --collector.f2b.socket={{ install_fail2ban_exporter_socket }} --web.listen-address={{ install_fail2ban_exporter_listen_address }}
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

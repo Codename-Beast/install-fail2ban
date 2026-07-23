@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.4.0"
+install_fail2ban_role_version: "0.5.0"
 
 # install_fail2ban — Defaults
 #
@@ -42,6 +42,7 @@ install_fail2ban_ignoreip:
 # Explizite Admin-/Monitoring-/VPN-/Scanner-IPs.
 # Keine großen Netze pauschal freistellen, wenn dort nicht alles vertrauenswürdig ist.
 install_fail2ban_ip_whitelist_enabled: true
+install_fail2ban_admin_ips: []
 install_fail2ban_allowed_ips: []
 # Beispiel:
 # install_fail2ban_allowed_ips:
@@ -91,12 +92,9 @@ install_fail2ban_apache_badbots_enabled: false
 install_fail2ban_apache_botsearch_enabled: false
 
 # -- SSH daemon Schutz ---------------------------------------------
-# Eingebauter Fail2Ban-Filter sshd. systemd ist auf modernen Debian/Ubuntu-Systemen
-# robust. Wenn ein Ziel nur /var/log/auth.log nutzt, backend auf auto setzen und
-# install_fail2ban_sshd_logpath: /var/log/auth.log konfigurieren.
+# SSH wird nur über systemd-journal gelesen; kein Datei-Log-Fallback.
 install_fail2ban_sshd_port: ssh
 install_fail2ban_sshd_backend: systemd
-install_fail2ban_sshd_logpath: ""
 install_fail2ban_sshd_maxretry: 5
 install_fail2ban_sshd_findtime: 10m
 install_fail2ban_sshd_bantime: 1h
@@ -186,18 +184,23 @@ install_fail2ban_recidive_maxretry: 3
 install_fail2ban_recidive_findtime: 7d
 install_fail2ban_recidive_bantime: -1
 
-# -- node_exporter Textfile Collector -----------------------------
-# Optionaler Prometheus-Export ohne eigenen Daemon: Cron schreibt eine .prom-Datei
-# in das node_exporter Textfile-Verzeichnis.
-install_fail2ban_node_exporter_textfile_enabled: false
-install_fail2ban_node_exporter_install_package: false
-install_fail2ban_node_exporter_package: prometheus-node-exporter
-install_fail2ban_node_exporter_textfile_dir: /var/lib/prometheus/node-exporter
-install_fail2ban_node_exporter_script_path: /usr/local/sbin/fail2ban-node-exporter-textfile.sh
-install_fail2ban_node_exporter_metrics_file: fail2ban.prom
-install_fail2ban_node_exporter_cron_file: /etc/cron.d/fail2ban-node-exporter-textfile
-install_fail2ban_node_exporter_cron_schedule: "* * * * *"
-install_fail2ban_node_exporter_cron_user: root
+# -- Fail2Ban Prometheus Exporter ---------------------------------
+# Offizieller Exporter: https://gitlab.com/hctrdev/fail2ban-prometheus-exporter
+install_fail2ban_exporter_enabled: false
+install_fail2ban_exporter_version: "0.10.3"
+install_fail2ban_exporter_arch: linux_amd64
+install_fail2ban_exporter_archive_url: >-
+  https://gitlab.com//-/project/24199687/uploads/18c602420dfd42bdf718a70823afa657/fail2ban_exporter_0.10.3_linux_amd64.tar.gz
+install_fail2ban_exporter_archive_checksum: "sha256:85733a343048090dba169226a8ca0b59b9cfecb9eaa163014a94146f04116e34"
+install_fail2ban_exporter_src_dir: /usr/local/src/fail2ban_exporter
+install_fail2ban_exporter_bin_path: /usr/local/bin/fail2ban_exporter
+install_fail2ban_exporter_socket: /var/run/fail2ban/fail2ban.sock
+install_fail2ban_exporter_listen_address: "127.0.0.1:9191"
+install_fail2ban_exporter_health_url: "http://127.0.0.1:9191/metrics"
+install_fail2ban_exporter_service_name: fail2ban-exporter
+
+# SSH-Schutz bleibt ausrollsicher: Admin-Quellen müssen explizit freigestellt sein.
+install_fail2ban_require_admin_whitelist_for_sshd: true
 
 # -- Reporting / Nur-Lesen-Modus ----------------------------------
 # report_only liest die vorhandene aktive/lokale Fail2Ban-Konfiguration aus und
