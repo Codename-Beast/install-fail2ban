@@ -10,6 +10,31 @@
 {% set ignoreip = (_base_ignoreip + _allowed_ips) | unique | list | join(' ') %}
 
 # -----------------------------------------------------------------------------
+# SSH daemon protection. Keep this conservative: SSH lockouts are operationally painful.
+# -----------------------------------------------------------------------------
+[sshd]
+enabled = {{ install_fail2ban_sshd_enabled | ternary('true', 'false') }}
+filter = sshd
+port = {{ install_fail2ban_sshd_port }}
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ install_fail2ban_ignoreself | ternary('true', 'false') }}
+usedns = {{ install_fail2ban_usedns }}
+backend = {{ install_fail2ban_sshd_backend }}
+banaction = {{ install_fail2ban_banaction }}
+action = %(action_)s
+{% if install_fail2ban_sshd_logpath | length > 0 %}
+logpath = {{ install_fail2ban_sshd_logpath }}
+{% endif %}
+maxretry = {{ install_fail2ban_sshd_maxretry }}
+findtime = {{ install_fail2ban_sshd_findtime }}
+bantime = {{ install_fail2ban_sshd_bantime }}
+bantime.increment = {{ install_fail2ban_sshd_bantime_increment | ternary('true', 'false') }}
+bantime.multipliers = {{ install_fail2ban_sshd_bantime_multipliers }}
+bantime.maxtime = {{ install_fail2ban_sshd_bantime_maxtime }}
+bantime.rndtime = {{ install_fail2ban_sshd_bantime_rndtime }}
+
+# -----------------------------------------------------------------------------
 # High-confidence malicious path requests
 # -----------------------------------------------------------------------------
 [apache-malicious-paths]

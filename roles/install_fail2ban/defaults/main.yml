@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.2.0"
+install_fail2ban_role_version: "0.3.0"
 
 # install_fail2ban — Defaults
 #
@@ -21,6 +21,7 @@ install_fail2ban_apache_log_dir: /var/log/apache2
 # -- Backup --------------------------------------------------------
 install_fail2ban_backup_existing_config: true
 install_fail2ban_backup_dir: /root/fail2ban-backup
+install_fail2ban_backup_marker: /root/fail2ban-backup/.install_fail2ban_initial_backup_done
 
 # -- IP Whitelist --------------------------------------------------
 # Base entries are always protected from managed Fail2Ban jails.
@@ -58,6 +59,7 @@ install_fail2ban_ignoreself: true
 
 # -- Managed jail enablement --------------------------------------
 # High-confidence default jails. These are active by default.
+install_fail2ban_sshd_enabled: true
 install_fail2ban_malicious_paths_enabled: true
 install_fail2ban_scanner_useragents_enabled: true
 install_fail2ban_scanburst_enabled: true
@@ -69,6 +71,21 @@ install_fail2ban_recidive_enabled: true
 install_fail2ban_apache_auth_enabled: false
 install_fail2ban_apache_badbots_enabled: false
 install_fail2ban_apache_botsearch_enabled: false
+
+# -- SSH daemon protection -----------------------------------------
+# Uses the built-in sshd filter. systemd backend works well on modern Debian/Ubuntu.
+# If your target logs SSH only to /var/log/auth.log and systemd backend is unavailable,
+# set install_fail2ban_sshd_backend: auto and install_fail2ban_sshd_logpath: /var/log/auth.log.
+install_fail2ban_sshd_port: ssh
+install_fail2ban_sshd_backend: systemd
+install_fail2ban_sshd_logpath: ""
+install_fail2ban_sshd_maxretry: 5
+install_fail2ban_sshd_findtime: 10m
+install_fail2ban_sshd_bantime: 1h
+install_fail2ban_sshd_bantime_increment: true
+install_fail2ban_sshd_bantime_multipliers: "1 2 6 24 72"
+install_fail2ban_sshd_bantime_maxtime: 7d
+install_fail2ban_sshd_bantime_rndtime: 5m
 
 # -- High-confidence permanent bans -------------------------------
 install_fail2ban_malicious_paths_maxretry: 1

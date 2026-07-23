@@ -10,6 +10,7 @@ Wichtig:
 - Standard-Logpfade sind Apache-Datei-Logs unter `/var/log/apache2/`.
 - Die Rolle verändert keine Apache-, PHP-, Moodle-, Reverse-Proxy- oder CDN-Konfiguration.
 - Whitelisting läuft über `ignoreip` pro verwaltetem Jail, nicht über einen globalen `[DEFAULT]`-Block.
+- Die Rolle ist idempotent ausgelegt: erneute Läufe schreiben nur bei Abweichungen und restarten nur nach erfolgreicher Prüfung.
 
 ## Getestete Ansible-Versionen
 
@@ -73,6 +74,9 @@ ansible-playbook -i inventories/example/hosts.ini playbooks/install_fail2ban.yml
 install_fail2ban_access_log: /var/log/apache2/*access.log
 install_fail2ban_error_log: /var/log/apache2/*error.log
 
+install_fail2ban_sshd_enabled: true
+install_fail2ban_sshd_backend: systemd
+
 install_fail2ban_run_nft_test_ban: true
 install_fail2ban_test_ban_ip: 192.0.2.123
 ```
@@ -108,6 +112,7 @@ Hinweis: Keine großen privaten Netze wie `10.0.0.0/8` pauschal freistellen, wen
 
 Aktivierte Standard-Jails:
 
+- `sshd`: SSH-Bruteforce-Schutz, konservativ und progressiv
 - `apache-malicious-paths`: eindeutige Exploit-/Fremdsystem-Pfade, sofort permanent
 - `apache-scanner-useragents`: explizit benannte Scanner, sofort permanent
 - `apache-scanburst`: viele 400/403/404/405/408/414 in kurzer Zeit, temporär und progressiv
@@ -128,6 +133,15 @@ Alle Jails nutzen nftables-Actions. `recidive` sperrt Wiederholungstäter dauerh
 Die wichtigsten Werte sind einzeln überschreibbar:
 
 ```yaml
+install_fail2ban_sshd_enabled: true
+install_fail2ban_sshd_port: ssh
+install_fail2ban_sshd_backend: systemd
+install_fail2ban_sshd_logpath: ""
+install_fail2ban_sshd_maxretry: 5
+install_fail2ban_sshd_findtime: 10m
+install_fail2ban_sshd_bantime: 1h
+install_fail2ban_sshd_bantime_increment: true
+
 install_fail2ban_malicious_paths_maxretry: 1
 install_fail2ban_malicious_paths_findtime: 1d
 install_fail2ban_malicious_paths_bantime: -1
@@ -152,6 +166,24 @@ install_fail2ban_apache_auth_findtime: 10m
 install_fail2ban_apache_auth_bantime: 1d
 ```
 
+Wenn ein Zielserver SSH nicht über systemd-journal, sondern nur über `/var/log/auth.log` auswerten soll:
+
+```yaml
+install_fail2ban_sshd_backend: auto
+install_fail2ban_sshd_logpath: /var/log/auth.log
+```
+
+## Idempotenz und Aktivierungsreihenfolge
+
+Die Rolle kann mehrfach laufen:
+
+- Paketinstallation, Verzeichnisse, Dateien und Templates sind idempotent.
+- Das initiale Backup wird nur einmal erstellt und über `install_fail2ban_backup_marker` markiert.
+- `fail2ban-client -t` läuft nach dem Rendern der verwalteten Dateien.
+- Fail2Ban wird erst nach erfolgreicher Prüfung gestartet bzw. aktiviert.
+- Ein Restart passiert nur, wenn verwaltete Konfigurationsdateien wirklich geändert wurden.
+- Wenn die Prüfung fehlschlägt, wird nicht aktiviert/restarted.
+
 ## Abbruchbedingungen
 
 Die Rolle bricht ab, wenn:
@@ -171,7 +203,10 @@ Die Rolle erstellt vor Änderungen an `/etc/fail2ban` optional ein Backup:
 ```yaml
 install_fail2ban_backup_existing_config: true
 install_fail2ban_backup_dir: /root/fail2ban-backup
+install_fail2ban_backup_marker: /root/fail2ban-backup/.install_fail2ban_initial_backup_done
 ```
+
+Das Backup ist bewusst ein initiales Sicherheitsbackup. Es wird bei weiteren idempotenten Läufen nicht jedes Mal neu erzeugt.
 
 Manuell zurückrollen:
 
