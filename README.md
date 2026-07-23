@@ -53,8 +53,8 @@ ansible-playbook -i inventory install_fail2ban.yml --check --diff
 - installiert eigene Filter für Apache/Moodle-Scans
 - rendert SSH-, Apache- und Recidive-Jails
 - prüft die Fail2Ban-Konfiguration mit `fail2ban-client -t`
-- startet/aktiviert Fail2Ban erst nach erfolgreicher Prüfung
-- startet Fail2Ban nur neu, wenn verwaltete Konfiguration geändert wurde
+- bricht bei ungültiger Konfiguration mit stdout/stderr ab
+- startet oder restartet Fail2Ban erst nach erfolgreicher Prüfung
 - kann optional den Fail2Ban Prometheus Exporter installieren
 
 ---

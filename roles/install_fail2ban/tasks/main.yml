@@ -341,24 +341,33 @@
 - name: "Verify | test Fail2Ban config"
   command:
     cmd: fail2ban-client -t
+  register: install_fail2ban_config_test
   changed_when: false
+  failed_when: false
 
-- name: "Service | start and enable Fail2Ban"
+- name: "Verify | stop on invalid config"
+  fail:
+    msg:
+      - "Fail2Ban config test failed. Service was not started or restarted."
+      - "Command: fail2ban-client -t"
+      - "Exit code: {{ install_fail2ban_config_test.rc }}"
+      - "stdout: {{ install_fail2ban_config_test.stdout_lines | default([]) }}"
+      - "stderr: {{ install_fail2ban_config_test.stderr_lines | default([]) }}"
+  when: install_fail2ban_config_test.rc != 0
+
+- name: "Service | apply Fail2Ban state"
   service:
     name: fail2ban
-    state: started
+    state: "{{ install_fail2ban_config_changed | ternary('restarted', 'started') }}"
     enabled: true
-
-- name: "Service | restart on config change"
-  service:
-    name: fail2ban
-    state: restarted
-    enabled: true
-  when: >-
-    install_fail2ban_daemon_config.changed or
-    install_fail2ban_static_filter_config.changed or
-    install_fail2ban_scanner_filter_config.changed or
-    install_fail2ban_jail_config.changed
+  vars:
+    install_fail2ban_config_changed: >-
+      {{
+        install_fail2ban_daemon_config.changed or
+        install_fail2ban_static_filter_config.changed or
+        install_fail2ban_scanner_filter_config.changed or
+        install_fail2ban_jail_config.changed
+      }}
 
 - name: "Monitoring | create exporter source dir"
   file:

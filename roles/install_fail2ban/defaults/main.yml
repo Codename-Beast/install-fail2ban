@@ -1,5 +1,5 @@
 ---
-install_fail2ban_role_version: "0.8.0"
+install_fail2ban_role_version: "0.9.0"
 
 # install_fail2ban defaults
 #
