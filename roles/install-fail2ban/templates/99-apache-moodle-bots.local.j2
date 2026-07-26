@@ -79,7 +79,7 @@ bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
 
 # -----------------------------------------------------------------------------
 # Moodle Behat exposure: public 200 responses and probes for leftover Behat paths.
-# A 200 response is high confidence exposure and is banned immediately.
+# First hit bans immediately; repeat offenders escalate beyond the initial short ban.
 # -----------------------------------------------------------------------------
 [moodle-behat-access]
 enabled = {{ fail2ban_moodle_behat_access_enabled | bool | ternary('true', 'false') }}
@@ -96,8 +96,10 @@ logpath = {{ fail2ban_access_log }}
 maxretry = {{ fail2ban_moodle_behat_access_maxretry }}
 findtime = {{ fail2ban_moodle_behat_access_findtime }}
 bantime = {{ fail2ban_moodle_behat_access_bantime }}
-bantime.increment = false
-bantime.rndtime = 0
+bantime.increment = {{ fail2ban_moodle_behat_access_bantime_increment | bool | ternary('true', 'false') }}
+bantime.multipliers = {{ fail2ban_moodle_behat_access_multipliers }}
+bantime.maxtime = {{ fail2ban_moodle_behat_access_maxtime }}
+bantime.rndtime = {{ fail2ban_moodle_behat_access_rndtime }}
 
 # -----------------------------------------------------------------------------
 # Explicitly named scanners in the User-Agent.

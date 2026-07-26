@@ -156,6 +156,12 @@ fail2ban_moodle_badbots_rndtime: 5m
 fail2ban_moodle_behat_access_maxretry: 1
 fail2ban_moodle_behat_access_findtime: 10m
 fail2ban_moodle_behat_access_bantime: 1h
+# Keep the first Behat hit temporary because this jail also includes 404 probes,
+# but escalate repeat offenders so scanners cannot continue every few hours.
+fail2ban_moodle_behat_access_bantime_increment: true
+fail2ban_moodle_behat_access_multipliers: "1 6 24 168"
+fail2ban_moodle_behat_access_maxtime: 30d
+fail2ban_moodle_behat_access_rndtime: 10m
 # Optional jail-local exemptions. Use this for CI/staging Behat runners that
 # should still be checked by other jails such as scanburst or moodle-badbots.
 fail2ban_moodle_behat_access_ignoreip: []

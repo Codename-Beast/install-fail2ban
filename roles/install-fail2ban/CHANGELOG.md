@@ -29,6 +29,7 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
 - Fail2Ban-Regex-Checks prüfen jetzt konkrete Trefferzahlen für Attack-, Clean- und Ignore-Fixtures, damit ein 0-Treffer-Filter die CI nicht mehr grün passieren kann.
 - Behat-Zugriffe mit HTTP 200 werden als öffentliche Exposition gewertet und mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt; HTTP 404 bleibt als Probe-Erkennung enthalten.
+- `moodle-behat-access` eskaliert Wiederholungstäter jetzt progressiv, damit Scanner nach der ersten temporären Sperre nicht stündlich weitermachen können.
 - README dokumentiert die Low-and-Slow-Grenze kurzer Schwellwert-Jails und die optionale Gegenmaßnahme `apache-slow-scan`.
 - Repository der eLedia Konvention und für Infra angepasst.
 
