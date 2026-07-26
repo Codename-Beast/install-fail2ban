@@ -185,7 +185,6 @@
     - Validate Fail2Ban config
     - Reload Fail2Ban
 
-    
 - name: "Config | render jails"
   template:
     src: 99-apache-moodle-bots.local.j2
