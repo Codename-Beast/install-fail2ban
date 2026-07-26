@@ -1,26 +1,50 @@
 [Definition]
 # Managed by Ansible role install-fail2ban.
 #
-# High-confidence User-Agent abuse:
+# User-Agent abuse:
 # - missing/empty UA: "-" or only whitespace
 # - very long UA values (default >= 256 chars)
-# - explicitly named scanner/security tools from fail2ban_scanner_useragents
 #
 # Generic clients such as curl, wget, python-requests, or Go-http-client are
 # intentionally not matched by default because they may be legitimate monitoring
-# or API clients. Add them explicitly via fail2ban_scanner_useragents_extra only
-# if your own logs prove they are unwanted.
+# or API clients.
+#
+# Named scanner/security tools (sqlmap, nikto, etc.) are intentionally NOT
+# checked here. That detection lives solely in the apache-scanner-useragents
+# jail, so a single scanner request produces exactly one ban event, not two.
+# This filter only owns the two structural UA anomalies above.
+#
+# Regex breakdown (matches standard Apache Combined Log Format):
+#   ^(?:\S+:\d+\s+)?        optional "ip:port" prefix (e.g. reverse proxy log)
+#   <HOST>                  client IP (Fail2ban placeholder)
+#   \s+\S+\s+\S+\s+         logname + user fields ("- -" in Combined Log Format)
+#   \[[^\]]+\]\s+           timestamp block, e.g. [26/Jul/2026:18:16:08 +0200]
+#   "[^"]*"                 request field, content irrelevant to this filter
+#   \s+\d{3}                HTTP status code
+#   \s+\S+                  response size in bytes (or "-"); always present in
+#                           Combined Log Format, therefore NOT optional here
+#   \s+"[^"]*"              referer field, content irrelevant, just consumed
+#   \s+"..."                user-agent field, condition varies per line below
+#
+# Note: fields are matched positionally rather than via a generic ".*" scan,
+# so the User-Agent check cannot be confused with text elsewhere in the line
+# (log injection via a crafted request path or referer).
+#
+# Two failregex lines below cover, in order:
+#   1) missing/empty User-Agent ("-" or whitespace-only)
+#   2) oversized User-Agent (>= fail2ban_unusual_useragents_max_length chars)
+#
+# ignoreregex exempts explicitly trusted tools (fail2ban_scanner_useragents_ignore)
+# in case a long-but-legitimate internal tool name would otherwise trip the
+# oversized-UA rule above.
 
-{% set _scanner_agents = ((fail2ban_scanner_useragents | default([])) + (fail2ban_scanner_useragents_extra | default([]))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set _scanner_ignore_agents = (fail2ban_scanner_useragents_ignore | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set _max_length = [fail2ban_unusual_useragents_max_length | default(256) | int, 1] | max %}
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"(?:-|\s*)"(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]{{ '{' }}{{ _max_length }},{{ '}' }}"(?:\s+.*)?$
-{% if _scanner_agents | length > 0 %}
-            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
-{% endif %}
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"(?:-|\s*)"(?:\s+.*)?$
+            ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]{{ '{' }}{{ _max_length }},{{ '}' }}"(?:\s+.*)?$
+
 {% if _scanner_ignore_agents | length > 0 %}
-ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
 {% else %}
 ignoreregex =
 {% endif %}

@@ -6,11 +6,11 @@
 
 Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Service neu geladen oder gestartet wird.
 
-Vorab Infos Einholen ohne Installation:
+Vorab Infos Einholen ohne Installation :
 ```bash
 ansible-playbook install_fail2ban.yml  -e hosts="hustensaft" -e report_only=true -i inventory/hc-moodle
 ```
-Installation:
+Installation auf den Server brügeln :
 
 ```bash
 ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i  inventory/hc-moodle
@@ -20,7 +20,7 @@ ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i  inventory/hc-moo
 
 ## ⚙️ Zusammenfassung
 
-|| Stand |
+|Service-Name| Stand |
 |---|---|
 | Zielsystem | Debian |
 | Firewall | nftables, sollte Installiert sein |
@@ -219,3 +219,5 @@ sudo systemctl restart fail2ban
 
 - ansible-core 2.12.10
 - ansible-core 2.21.2
+##
+Made with ☕ and ❤️ by **Bernd Schreistetter**

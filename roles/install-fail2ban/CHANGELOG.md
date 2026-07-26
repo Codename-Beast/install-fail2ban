@@ -12,22 +12,28 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Funktionales Jail `apache-unusual-useragents` für fehlende, leere, überlange und explizite Scanner-User-Agents ergänzt.
 - `moodle-badbots` als eigenes Moodle-Jail ergänzt.
 - Projektkonfiguration für `ansible-lint` ergänzt.
+- Ausführlicher Kommentar-Header (Regex-Breakdown) in allen Filter-Dateien (`apache-malicious-paths.conf`, `apache-scanburst.conf`, `moodle-badbots.conf`, `apache-scanner-useragents.conf.j2`, `apache-unusual-useragents.conf.j2`) ergänzt, um Aufbau und Zweck jeder Regex-Zeile nachvollziehbar zu dokumentieren.
+- `Config | flush pending Fail2Ban handlers` (`meta: flush_handlers`) nach dem letzten Config-Render-Task ergänzt, um sicherzustellen, dass Validierung und Reload/Restart innerhalb desselben Rollenlaufs erfolgen, bevor nachfolgende Tasks oder Rollen greifen.
+- Hinweis-Kommentar in `moodle-badbots.conf` zu `login/token.php` ergänzt: Dokumentiert das Risiko von Sammel-Bans bei geteilten IPs (Schul-/Campus-NAT, CGNAT) durch die Moodle Mobile App sowie mögliche Gegenmaßnahmen (Jail-Tuning, `ignoreip`, Moodle-eigener Konto-Lockout).
 
 ### Changed
 
 - Paketinstallation prüft installierte Pakete vorab und überspringt `apt`, wenn `fail2ban` bereits installiert ist.
 - Scanner-Templates filtern leere Werte, deduplizieren Listen und bleiben auch bei leeren Scanner-Listen valide.
 - Regex-Filter für Web-Pfade, Moodle-Login/Token-Endpunkte und Scanbursts geprüft und präzisiert.
+- Anker aller Custom-Filter (`apache-malicious-paths`, `apache-scanburst`, `moodle-badbots`, `apache-scanner-useragents`, `apache-unusual-useragents`) von einer generischen `.*"`-Suche auf eine feldgenaue Verankerung direkt hinter dem Zeitstempel (`\[[^\]]+\]\s+"`) umgestellt. Verhindert, dass ein präparierter User-Agent- oder Referer-Wert mit eingebettetem, gefälschtem Request-String (`"GET ... HTTP/1.1"`) den eigentlichen Match verfälscht oder Fehlzählungen in den verhaltensbasierten Jails (`moodle-badbots`, `apache-scanburst`) verursacht.
+- Feld für die Antwortgröße (`size`) in `apache-scanner-useragents` und `apache-unusual-useragents` von optional auf verpflichtend geändert.
+- Scanner-Namen-Erkennung (`sqlmap`, `nikto`, etc.) aus `apache-unusual-useragents` entfernt, da sie sich mit `apache-scanner-useragents` überschnitt und pro Vorfall zwei unabhängige Ban-Events statt eines erzeugte. `apache-unusual-useragents` ist jetzt ausschließlich für fehlende/leere und überlange User-Agents zuständig; die Zählung gegenüber `recidive` ist damit wieder eindeutig einem Ereignis pro Vorfall zugeordnet.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
 - Repository der eLedia Konvention und für Infra angepasst.
 
 ### Testing
-- Rolle gegen Debian 13 Server Getestet.
-- idempotent Sichergestellt.
-- ansible-core 2.12.10 Support 
-- ansible-core 2.21.2 Support
 
+- Rolle gegen Debian 13 Server getestet.
+- Idempotent sichergestellt.
+- ansible-core 2.12.10 Support.
+- ansible-core 2.21.2 Support.
 ---
 
 ## [1.2.0]

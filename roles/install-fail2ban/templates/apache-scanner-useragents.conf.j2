@@ -5,17 +5,45 @@
 # Generic clients such as curl, wget, python-requests, or Go-http-client are
 # not included because they may be used legitimately for monitoring, APIs,
 # and administration.
+#
+# Regex breakdown (matches standard Apache Combined Log Format):
+#   ^(?:\S+:\d+\s+)?        optional "ip:port" prefix (e.g. reverse proxy log)
+#   <HOST>                  client IP (Fail2ban placeholder)
+#   \s+\S+\s+\S+\s+         logname + user fields ("- -" in Combined Log Format)
+#   \[[^\]]+\]\s+           timestamp block, e.g. [26/Jul/2026:18:16:08 +0200]
+#   "[^"]*"                 request field (method/path/version), content itself
+#                           is irrelevant here -> not inspected by this filter
+#   \s+\d{3}                HTTP status code
+#   \s+\S+                  response size in bytes (or "-"); always present in
+#                           Combined Log Format, therefore NOT optional here
+#   \s+"[^"]*"              referer field, content irrelevant, just consumed
+#                           to correctly reach the following field
+#   \s+"[^"]*(?i:TOOL1|TOOL2|...)[^"]*"   user-agent field: match only succeeds
+#                           if one of the configured tool names appears
+#                           anywhere inside the quoted UA string
+#   (?:\s+.*)?$             anything Apache appends after (rare, ignored)
+#
+# Note: fields are matched positionally (logname/user/timestamp/request/status/
+# size/referer/useragent) rather than via a generic ".*" scan -> the User-Agent
+# match cannot be confused with scanner-name-like text appearing elsewhere in
+# the line (e.g. inside the request path itself).
+#
+# Caveat: if the request path/query contains a raw, unescaped double-quote
+# character, Apache's own log line can shift field boundaries before this
+# filter ever sees it. That is a logging characteristic, not something this
+# regex can fully compensate for; if it becomes a practical concern, address
+# it at the Apache LogFormat/escaping level rather than here.
 
 {% set _scanner_agents = ((fail2ban_scanner_useragents | default([])) + (fail2ban_scanner_useragents_extra | default([]))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set _scanner_ignore_agents = (fail2ban_scanner_useragents_ignore | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% if _scanner_agents | length > 0 %}
-failregex = ^(?:\S+:\d+\s+)?<HOST>.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
 {% else %}
 # No scanner User-Agent fragments are configured. Keep the filter valid but inert.
 failregex = ^$
 {% endif %}
 {% if _scanner_ignore_agents | length > 0 %}
-ignoreregex = ^(?:\S+:\d+\s+)?<HOST>.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
 {% else %}
 ignoreregex =
 {% endif %}

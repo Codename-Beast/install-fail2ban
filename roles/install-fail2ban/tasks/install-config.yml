@@ -184,3 +184,19 @@
   notify:
     - Validate Fail2Ban config
     - Reload Fail2Ban
+
+    
+- name: "Config | render jails"
+  template:
+    src: 99-apache-moodle-bots.local.j2
+    dest: /etc/fail2ban/jail.d/99-apache-moodle-bots.local
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_jail_config
+  notify:
+    - Validate Fail2Ban config
+    - Reload Fail2Ban
+
+- name: "Config | flush pending Fail2Ban handlers"
+  meta: flush_handlers
