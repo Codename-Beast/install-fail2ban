@@ -6,8 +6,14 @@
 
 Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Service neu geladen oder gestartet wird.
 
+Vorab Infos Einholen ohne Installation:
 ```bash
-ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i <Inventory>
+ansible-playbook install_fail2ban.yml  -e hosts="hustensaft" -e report_only=true -i inventory/hc-moodle
+```
+Installation:
+
+```bash
+ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i  inventory/hc-moodle
 ```
 
 ---
@@ -159,14 +165,6 @@ fail2ban_recidive_maxretry: 3
 fail2ban_recidive_findtime: 7d
 fail2ban_recidive_bantime: -1
 ```
-
-Reine Statusabfrage ohne Installation:
-
-```bash
-ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -e report_only=true -i <Inventory>
-```
-
----
 
 ## 📈 Fail2Ban Prometheus Exporter
 
