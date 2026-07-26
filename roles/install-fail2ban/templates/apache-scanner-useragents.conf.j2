@@ -10,7 +10,7 @@
 #   ^(?:\S+:\d+\s+)?        optional "ip:port" prefix (e.g. reverse proxy log)
 #   <HOST>                  client IP (Fail2ban placeholder)
 #   \s+\S+\s+\S+\s+         logname + user fields ("- -" in Combined Log Format)
-#   \[[^\]]+\]\s+           timestamp block, e.g. [26/Jul/2026:18:16:08 +0200]
+#   \[[^\]]*\]\s+           timestamp block, e.g. [26/Jul/2026:18:16:08 +0200]
 #   "[^"]*"                 request field (method/path/version), content itself
 #                           is irrelevant here -> not inspected by this filter
 #   \s+\d{3}                HTTP status code
@@ -37,13 +37,16 @@
 {% set _scanner_agents = ((fail2ban_scanner_useragents | default([])) + (fail2ban_scanner_useragents_extra | default([]))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set _scanner_ignore_agents = (fail2ban_scanner_useragents_ignore | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% if _scanner_agents | length > 0 %}
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+# Fail2Ban DateDetector strips the recognized timestamp text before failregex is applied;
+# only the surrounding brackets remain as [], hence [^\]]* (zero-or-more)
+# instead of [^\]]+ (one-or-more) in the timestamp field.
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]*\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
 {% else %}
 # No scanner User-Agent fragments are configured. Keep the filter valid but inert.
 failregex = ^$
 {% endif %}
 {% if _scanner_ignore_agents | length > 0 %}
-ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]*\]\s+"[^"]*"\s+\d{3}\s+\S+\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
 {% else %}
 ignoreregex =
 {% endif %}

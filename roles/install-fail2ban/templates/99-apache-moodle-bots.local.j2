@@ -4,7 +4,9 @@
 # - No global [DEFAULT] section: this file must not change unrelated SSH/service jails.
 # - ignoreip is built from base values, explicit allowlists, and optional imported nftables sets.
 
-{% set ignoreip = (fail2ban_effective_ignoreip | default((fail2ban_base_ignoreip | default([])) + (fail2ban_ignoreip | default([])))) | map('string') | map('trim') | reject('equalto', '') | unique | list | join(' ') %}
+{% set ignoreip_list = (fail2ban_effective_ignoreip | default((fail2ban_base_ignoreip | default([])) + (fail2ban_ignoreip | default([])))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
+{% set ignoreip = ignoreip_list | join(' ') %}
+{% set behat_ignoreip = (ignoreip_list + (fail2ban_moodle_behat_access_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 
 # -----------------------------------------------------------------------------
 # SSH brute-force protection.
@@ -74,6 +76,28 @@ bantime.increment = true
 bantime.multipliers = {{ fail2ban_moodle_badbots_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_badbots_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
+
+# -----------------------------------------------------------------------------
+# Moodle Behat exposure: repeated 404 probes for leftover Behat paths.
+# Fail2Ban reacts after the 404 was logged; webserver/app config must hide files first.
+# -----------------------------------------------------------------------------
+[moodle-behat-access]
+enabled = {{ fail2ban_moodle_behat_access_enabled | bool | ternary('true', 'false') }}
+filter = moodle-behat-access
+port = http,https
+protocol = tcp
+ignoreip = {{ behat_ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_moodle_behat_access_maxretry }}
+findtime = {{ fail2ban_moodle_behat_access_findtime }}
+bantime = {{ fail2ban_moodle_behat_access_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
 
 # -----------------------------------------------------------------------------
 # Explicitly named scanners in the User-Agent.

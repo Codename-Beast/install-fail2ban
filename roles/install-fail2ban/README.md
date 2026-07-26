@@ -51,6 +51,7 @@ Standardmäßig aktiv:
 - `sshd`
 - `apache-malicious-paths`
 - `moodle-badbots`
+- `moodle-behat-access`
 - `apache-scanner-useragents`
 - `apache-unusual-useragents`
 - `apache-scanburst`
@@ -109,9 +110,10 @@ fail2ban_scanner_useragents_ignore:
 - fehlendem User-Agent `"-"`
 - leerem oder nur aus Leerzeichen bestehendem User-Agent
 - User-Agent ab `fail2ban_unusual_useragents_max_length`, standardmäßig `256`
-- Scanner-User-Agents aus den konfigurierten Listen
 
 Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind nicht pauschal enthalten. Die können in Monitoring, APIs oder Cronjobs legitim sein.
+
+`moodle-behat-access` überwacht Behat-bezogene Moodle-Pfade nur dann, wenn Apache bereits `404` geloggt hat. Nach mehr als drei Treffern innerhalb von `fail2ban_moodle_behat_access_findtime` wird die Quelle temporär gebannt. Die 404-Ausgabe selbst muss Apache/Moodle liefern; Fail2Ban reagiert erst auf den Logeintrag.
 
 ---
 
@@ -161,6 +163,11 @@ fail2ban_scanburst_maxretry: 80
 fail2ban_scanburst_findtime: 5m
 fail2ban_scanburst_bantime: 12h
 
+fail2ban_moodle_behat_access_maxretry: 4
+fail2ban_moodle_behat_access_findtime: 10m
+fail2ban_moodle_behat_access_bantime: 1h
+fail2ban_moodle_behat_access_ignoreip: []
+
 fail2ban_recidive_maxretry: 3
 fail2ban_recidive_findtime: 7d
 fail2ban_recidive_bantime: -1
@@ -196,6 +203,8 @@ Manuell zurückrollen:
 sudo rm -f \
   /etc/fail2ban/fail2ban.d/99-web-protection.local \
   /etc/fail2ban/filter.d/apache-malicious-paths.conf \
+  /etc/fail2ban/filter.d/moodle-badbots.conf \
+  /etc/fail2ban/filter.d/moodle-behat-access.conf \
   /etc/fail2ban/filter.d/apache-scanner-useragents.conf \
   /etc/fail2ban/filter.d/apache-unusual-useragents.conf \
   /etc/fail2ban/filter.d/apache-scanburst.conf \

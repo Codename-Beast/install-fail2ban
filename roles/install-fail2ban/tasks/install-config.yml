@@ -141,6 +141,7 @@
   loop:
     - apache-malicious-paths.conf
     - moodle-badbots.conf
+    - moodle-behat-access.conf
     - apache-scanburst.conf
   register: fail2ban_static_filter_config
   notify:
@@ -173,18 +174,6 @@
     - Reload Fail2Ban
 
 # Eine eigene Jail-Datei, kein globales [DEFAULT], damit fremde Jails unberührt bleiben.
-- name: "Config | render jails"
-  template:
-    src: 99-apache-moodle-bots.local.j2
-    dest: /etc/fail2ban/jail.d/99-apache-moodle-bots.local
-    owner: root
-    group: root
-    mode: "0644"
-  register: fail2ban_jail_config
-  notify:
-    - Validate Fail2Ban config
-    - Reload Fail2Ban
-
 - name: "Config | render jails"
   template:
     src: 99-apache-moodle-bots.local.j2

@@ -1,0 +1,7 @@
+198.51.100.60 - - [26/Jul/2026:02:10:00 +0200] "GET /behat HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.60 - - [26/Jul/2026:02:10:01 +0200] "GET /behat/ HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.60 - - [26/Jul/2026:02:10:02 +0200] "GET /behat.yml HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.60 - - [26/Jul/2026:02:10:03 +0200] "GET /behat_data/ HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.61 - - [26/Jul/2026:02:10:04 +0200] "GET /admin/tool/behat/index.php HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.62 - - [26/Jul/2026:02:10:05 +0200] "GET /lib/behat/classes/behat_config_manager.php HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+198.51.100.63 - - [26/Jul/2026:02:10:06 +0200] "GET /vendor/bin/behat HTTP/1.1" 404 1234 "-" "Mozilla/5.0"

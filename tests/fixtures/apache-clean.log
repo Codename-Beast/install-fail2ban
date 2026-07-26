@@ -10,3 +10,5 @@
 203.0.113.19 - - [26/Jul/2026:01:20:00 +0200] "GET /.well-known/acme-challenge/test-token HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
 203.0.113.20 - - [26/Jul/2026:01:20:00 +0200] "GET /pluginfile.php/1/core_admin/logocompact/0x150/1/logo.png HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
 203.0.113.21 - - [26/Jul/2026:01:20:00 +0200] "GET /webservice/rest/server.php?wstoken=abc&wsfunction=core_webservice_get_site_info HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
+203.0.113.22 - - [26/Jul/2026:01:20:00 +0200] "GET /adminercompletelyunrelatedword HTTP/1.1" 404 1234 "-" "Mozilla/5.0"
+203.0.113.23 - - [26/Jul/2026:01:20:00 +0200] "GET /adminerfoo.php HTTP/1.1" 404 1234 "-" "Mozilla/5.0"

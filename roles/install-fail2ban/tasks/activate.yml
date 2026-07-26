@@ -42,6 +42,7 @@
         + (['sshd'] if (fail2ban_sshd_enabled | bool) else [])
         + (['apache-malicious-paths'] if (fail2ban_malicious_paths_enabled | bool) else [])
         + (['moodle-badbots'] if (fail2ban_moodle_badbots_enabled | bool) else [])
+        + (['moodle-behat-access'] if (fail2ban_moodle_behat_access_enabled | bool) else [])
         + (['apache-scanner-useragents'] if (fail2ban_scanner_useragents_enabled | bool) else [])
         + (['apache-unusual-useragents'] if (fail2ban_unusual_useragents_enabled | bool) else [])
         + (['apache-scanburst'] if (fail2ban_scanburst_enabled | bool) else [])

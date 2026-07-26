@@ -11,6 +11,7 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Handler-Datei `install-fail2ban/handlers/main.yml` ergänzt.
 - Funktionales Jail `apache-unusual-useragents` für fehlende, leere, überlange und explizite Scanner-User-Agents ergänzt.
 - `moodle-badbots` als eigenes Moodle-Jail ergänzt.
+- Funktionales Jail `moodle-behat-access` ergänzt: überwacht Behat-bezogene Moodle-Pfade nur bei HTTP 404 und bannt temporär nach mehr als drei Treffern.
 - Projektkonfiguration für `ansible-lint` ergänzt.
 - Ausführlicher Kommentar-Header (Regex-Breakdown) in allen Filter-Dateien (`apache-malicious-paths.conf`, `apache-scanburst.conf`, `moodle-badbots.conf`, `apache-scanner-useragents.conf.j2`, `apache-unusual-useragents.conf.j2`) ergänzt, um Aufbau und Zweck jeder Regex-Zeile nachvollziehbar zu dokumentieren.
 - `Config | flush pending Fail2Ban handlers` (`meta: flush_handlers`) nach dem letzten Config-Render-Task ergänzt, um sicherzustellen, dass Validierung und Reload/Restart innerhalb desselben Rollenlaufs erfolgen, bevor nachfolgende Tasks oder Rollen greifen.
@@ -26,6 +27,7 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Scanner-Namen-Erkennung (`sqlmap`, `nikto`, etc.) aus `apache-unusual-useragents` entfernt, da sie sich mit `apache-scanner-useragents` überschnitt und pro Vorfall zwei unabhängige Ban-Events statt eines erzeugte. `apache-unusual-useragents` ist jetzt ausschließlich für fehlende/leere und überlange User-Agents zuständig; die Zählung gegenüber `recidive` ist damit wieder eindeutig einem Ereignis pro Vorfall zugeordnet.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
+- Fail2Ban-Regex-Checks prüfen jetzt konkrete Trefferzahlen für Attack-, Clean- und Ignore-Fixtures, damit ein 0-Treffer-Filter die CI nicht mehr grün passieren kann.
 - Repository der eLedia Konvention und für Infra angepasst.
 
 ### Testing

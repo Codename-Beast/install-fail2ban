@@ -18,11 +18,30 @@ validate ansible 2.12:
     - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
     - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
     - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
-    - fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
-    - fail2ban-regex tests/fixtures/apache-moodle-badbots-attack.log roles/install-fail2ban/files/moodle-badbots.conf
-    - fail2ban-regex tests/fixtures/apache-scanburst-attack.log roles/install-fail2ban/files/apache-scanburst.conf
-    - fail2ban-regex tests/fixtures/apache-scanner-attack.log /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
-    - fail2ban-regex tests/fixtures/apache-unusual-useragents-attack.log /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+    - |
+      MALICIOUS=roles/install-fail2ban/files/apache-malicious-paths.conf
+      MOODLE=roles/install-fail2ban/files/moodle-badbots.conf
+      BEHAT=roles/install-fail2ban/files/moodle-behat-access.conf
+      SCANBURST=roles/install-fail2ban/files/apache-scanburst.conf
+      SCANNER=/tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+      UNUSUAL=/tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+      check_lines() {
+        fail2ban-regex "$1" "$2" | tee /tmp/f2b-regex.txt
+        grep -Fx "$3" /tmp/f2b-regex.txt
+      }
+      check_lines tests/fixtures/apache-malicious-attack.log "$MALICIOUS"         "Lines: 16 lines, 0 ignored, 16 matched, 0 missed"
+      check_lines tests/fixtures/apache-clean.log "$MALICIOUS"         "Lines: 14 lines, 0 ignored, 0 matched, 14 missed"
+      check_lines tests/fixtures/apache-moodle-badbots-attack.log "$MOODLE"         "Lines: 30 lines, 0 ignored, 30 matched, 0 missed"
+      check_lines tests/fixtures/apache-moodle-badbots-clean.log "$MOODLE"         "Lines: 10 lines, 0 ignored, 0 matched, 10 missed"
+      check_lines tests/fixtures/apache-moodle-behat-attack.log "$BEHAT"         "Lines: 7 lines, 0 ignored, 7 matched, 0 missed"
+      check_lines tests/fixtures/apache-moodle-behat-clean.log "$BEHAT"         "Lines: 9 lines, 0 ignored, 0 matched, 9 missed"
+      check_lines tests/fixtures/apache-scanburst-attack.log "$SCANBURST"         "Lines: 90 lines, 0 ignored, 90 matched, 0 missed"
+      check_lines tests/fixtures/apache-scanburst-clean.log "$SCANBURST"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
+      check_lines tests/fixtures/apache-scanner-attack.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
+      check_lines tests/fixtures/apache-scanner-clean.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 0 matched, 8 missed"
+      check_lines tests/fixtures/apache-scanner-ignored.log "$SCANNER"         "Lines: 1 lines, 1 ignored, 0 matched, 0 missed"
+      check_lines tests/fixtures/apache-unusual-useragents-attack.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 3 matched, 2 missed"
+      check_lines tests/fixtures/apache-unusual-useragents-clean.log "$UNUSUAL"         "Lines: 9 lines, 0 ignored, 0 matched, 9 missed"
 
 validate ansible 2.21:
   stage: validate
@@ -35,11 +54,30 @@ validate ansible 2.21:
     - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
     - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
     - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
-    - fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
-    - fail2ban-regex tests/fixtures/apache-moodle-badbots-attack.log roles/install-fail2ban/files/moodle-badbots.conf
-    - fail2ban-regex tests/fixtures/apache-scanburst-attack.log roles/install-fail2ban/files/apache-scanburst.conf
-    - fail2ban-regex tests/fixtures/apache-scanner-attack.log /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
-    - fail2ban-regex tests/fixtures/apache-unusual-useragents-attack.log /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+    - |
+      MALICIOUS=roles/install-fail2ban/files/apache-malicious-paths.conf
+      MOODLE=roles/install-fail2ban/files/moodle-badbots.conf
+      BEHAT=roles/install-fail2ban/files/moodle-behat-access.conf
+      SCANBURST=roles/install-fail2ban/files/apache-scanburst.conf
+      SCANNER=/tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+      UNUSUAL=/tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+      check_lines() {
+        fail2ban-regex "$1" "$2" | tee /tmp/f2b-regex.txt
+        grep -Fx "$3" /tmp/f2b-regex.txt
+      }
+      check_lines tests/fixtures/apache-malicious-attack.log "$MALICIOUS"         "Lines: 16 lines, 0 ignored, 16 matched, 0 missed"
+      check_lines tests/fixtures/apache-clean.log "$MALICIOUS"         "Lines: 14 lines, 0 ignored, 0 matched, 14 missed"
+      check_lines tests/fixtures/apache-moodle-badbots-attack.log "$MOODLE"         "Lines: 30 lines, 0 ignored, 30 matched, 0 missed"
+      check_lines tests/fixtures/apache-moodle-badbots-clean.log "$MOODLE"         "Lines: 10 lines, 0 ignored, 0 matched, 10 missed"
+      check_lines tests/fixtures/apache-moodle-behat-attack.log "$BEHAT"         "Lines: 7 lines, 0 ignored, 7 matched, 0 missed"
+      check_lines tests/fixtures/apache-moodle-behat-clean.log "$BEHAT"         "Lines: 9 lines, 0 ignored, 0 matched, 9 missed"
+      check_lines tests/fixtures/apache-scanburst-attack.log "$SCANBURST"         "Lines: 90 lines, 0 ignored, 90 matched, 0 missed"
+      check_lines tests/fixtures/apache-scanburst-clean.log "$SCANBURST"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
+      check_lines tests/fixtures/apache-scanner-attack.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
+      check_lines tests/fixtures/apache-scanner-clean.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 0 matched, 8 missed"
+      check_lines tests/fixtures/apache-scanner-ignored.log "$SCANNER"         "Lines: 1 lines, 1 ignored, 0 matched, 0 missed"
+      check_lines tests/fixtures/apache-unusual-useragents-attack.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 3 matched, 2 missed"
+      check_lines tests/fixtures/apache-unusual-useragents-clean.log "$UNUSUAL"         "Lines: 9 lines, 0 ignored, 0 matched, 9 missed"
 
 ansible lint:
   stage: lint
