@@ -4,41 +4,36 @@
 
 # 🛡️ install-fail2ban
 
-Ansible-Rolle für Debian- und Ubuntu-Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Dienst neu geladen oder gestartet wird.
-
-Der Standardlauf nutzt die Inventory-Gruppe `fail2ban_targets`:
+Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Service neu geladen oder gestartet wird.
 
 ```bash
-ansible-playbook -i inventory/hosts install_fail2ban.yml
+ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i <Inventory>
 ```
 
 ---
 
-## ✅ Kurzfassung
+## ⚙️ Zusammenfassung
 
-| Bereich | Stand |
+|| Stand |
 |---|---|
-| Zielsysteme | Debian/Ubuntu |
-| Firewall | nftables, muss vorhanden sein |
+| Zielsystem | Debian |
+| Firewall | nftables, sollte Installiert sein |
 | SSH | systemd-journal, Ports `22` und `3333` |
-| Webserver | Apache-Logs unter `/var/log/apache2` |
-| Prüfungen | Syntax, Template-Rendering, Regex-Fixtures, ansible-lint |
+| Apache-Logs unter `/var/log/apache2` |
 
-Die Rolle schreibt keine globale `[DEFAULT]`-Jail-Konfiguration. Alle verwalteten Jails bekommen ihre eigene `ignoreip`-Zeile, damit bestehende fremde Jails nicht ungewollt verändert werden.
+Die Rolle schreibt keine globale `[DEFAULT]`-Jail-Konfiguration. Alle verwalteten Jails bekommen ihre eigene `ignoreip`, damit bestehende fremde Jails nicht ungewollt verändert werden.
 
 ---
 
 ## ⚙️ Was die Rolle macht
 
-- prüft Betriebssystem, Ansible-Version, nftables und Apache-Logpfad
 - installiert `fail2ban`, wenn das Paket fehlt
 - überspringt `apt`, wenn alle benötigten Pakete bereits vorhanden sind
 - legt optional ein einmaliges Backup von `/etc/fail2ban` an
 - installiert Filter, Jails und Daemon-Konfiguration
 - rendert Scanner- und User-Agent-Filter aus Variablen
 - prüft mit `fail2ban-client -t`, bevor Fail2Ban neu geladen oder gestartet wird
-- nutzt Handler für Validate, Reload und Restart
-- prüft nach der Aktivierung Dienststatus und aktive Jails
+- prüft nach der Aktivierung den Fail2Ban Service und aktive Jails
 - kann optional den offiziellen Fail2Ban Prometheus Exporter installieren
 
 ---
@@ -56,11 +51,6 @@ Standardmäßig aktiv:
 - `apache-overflows`
 - `apache-shellshock`
 - `recidive`
-
-Vorbereitet, aber nicht automatisch aktiv:
-
-- `apache-auth`
-- `apache-botsearch`
 
 Hinweis: `apache-badbots` ist in dieser Rolle aktiv, sollte aber wie alle breiteren Bot-Filter gegen echte Logs geprüft werden.
 
@@ -98,14 +88,14 @@ fail2ban_allowed_ips:
 
 ```yaml
 fail2ban_scanner_useragents_extra:
-  - CompanySecurityScanner
+  - eLeDiaSecurityScanner
 ```
 
 Autorisierte Scanner können ausgenommen werden:
 
 ```yaml
 fail2ban_scanner_useragents_ignore:
-  - CompanySecurityScanner
+  - eLeDiaSecurityScanner
 ```
 
 `apache-unusual-useragents` bannt sofort bei:
@@ -132,13 +122,13 @@ Autorisierte Scanner kommen in die Ignore-Liste:
 
 ```yaml
 fail2ban_scanner_useragents_ignore:
-  - CompanySecurityScanner
+  - eLeSiaSecurityScanner
 ```
 
 Neue verdächtige Pfade ergänzt du im Filter:
 
 ```text
-roles/install-fail2ban/files/apache-malicious-paths.conf
+install-fail2ban/files/apache-malicious-paths.conf
 ```
 
 Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filter nach `/.env` an jeder Stelle im Request-Pfad sucht. Für einen neuen Pfad ergänzt du die passende Gruppe, zum Beispiel:
@@ -147,14 +137,7 @@ Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filte
 |backup\.zip|database\.sql
 ```
 
-Danach immer gegen Attack- und Clean-Logs testen:
-
-```bash
-fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
-fail2ban-regex tests/fixtures/apache-clean.log roles/install-fail2ban/files/apache-malicious-paths.conf
-```
-
-Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst lieber erst Logs sammeln.
+Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst kommt es zu FalsePositives.
 
 ---
 
@@ -177,49 +160,11 @@ fail2ban_recidive_findtime: 7d
 fail2ban_recidive_bantime: -1
 ```
 
-Reine Statusabfrage ohne Installation und ohne Dateischreibungen:
+Reine Statusabfrage ohne Installation:
 
 ```bash
-ansible-playbook -i inventory/hosts install_fail2ban.yml -e report_only=true
+ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -e report_only=true -i <Inventory>
 ```
-
----
-
-## 🧪 Lokale Prüfung
-
-Syntax-Check:
-
-```bash
-ANSIBLE_ROLES_PATH=/home/bernd/Downloads/install_fail2ban/roles \
-  ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
-```
-
-Templates rendern:
-
-```bash
-ANSIBLE_ROLES_PATH=/home/bernd/Downloads/install_fail2ban/roles \
-  ansible-playbook -i tests/inventory.ini tests/render_filters.yml
-```
-
-Lint:
-
-```bash
-ansible-lint .
-```
-
-Regex-Beispiele:
-
-```bash
-fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
-fail2ban-regex tests/fixtures/apache-moodle-badbots-attack.log roles/install-fail2ban/files/moodle-badbots.conf
-fail2ban-regex tests/fixtures/apache-scanburst-attack.log roles/install-fail2ban/files/apache-scanburst.conf
-fail2ban-regex tests/fixtures/apache-scanner-attack.log /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
-fail2ban-regex tests/fixtures/apache-unusual-useragents-attack.log /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
-```
-
-Die Fixture-Logs prüfen Angriffe und saubere Zugriffe für Moodle, API, Monitoring, Browser und autorisierte Scanner-Ausnahmen. Gerenderte Testdateien landen unter `/tmp`, nicht im Repository.
-
-`--check` ist für diese Rolle nicht geeignet, weil nftables- und Fail2Ban-Laufzeitprüfungen einen vorbereiteten Zielhost brauchen.
 
 ---
 

@@ -1,23 +1,11 @@
-# 🛠️ Manuelle Fail2Ban-Absicherung
+# Manuelle Absicherung
 
-Diese Anleitung beschreibt die händische Variante der Rolle `install-fail2ban` für Debian- und Ubuntu-Webserver. Sie ist für Fälle gedacht, in denen ein Server ohne Ansible vorbereitet, geprüft oder im Notfall nachvollziehbar abgesichert werden soll.
+Diese Anleitung beschreibt die händische Variante der Rolle `install-fail2ban` für eLeDia Webserver.
 
-Die Ansible-Rolle bleibt der bevorzugte Weg. Manuell arbeitest du nur, wenn du bewusst jede Datei selbst setzen und prüfen willst.
-
-> Kurz gesagt: Erst absichern, dann schreiben, dann testen, dann neu laden.
-> Wenn `fail2ban-client -t` fehlschlägt, bleibt der Dienst unverändert.
-
-## Inhalt
-
-- [Zielbild](#-zielbild)
-- [Vorbereitung](#1-werte-festlegen)
-- [Filter und Jails](#7-filter-installieren)
-- [Test und Aktivierung](#10-konfiguration-testen)
-- [Rollback und Notfallmodus](#16-rollback)
 
 ---
 
-## ✅ Zielbild
+## Ziel Zustand
 
 Am Ende soll der Server so stehen:
 
@@ -26,12 +14,11 @@ Am Ende soll der Server so stehen:
 - SSH ist über das systemd-Journal geschützt.
 - Die SSH-Ports `22` und `3333` sind abgedeckt.
 - Apache/Moodle-Scans werden über eigene Jails erkannt.
-- Ungewöhnliche oder eindeutig verdächtige User-Agents werden sofort gebannt.
 - Wiederholungstäter landen über `recidive` im Allports-Drop.
 - Admin-, VPN- oder Jump-Host-Adressen stehen in `ignoreip`.
 - Vor Start, Reload oder Restart wird immer `fail2ban-client -t` ausgeführt.
 
-Wichtig: Fail2Ban sperrt IP-Adressen, keine Benutzer. Auch ein Admin mit SSH-Key kann sich aussperren, wenn die eigene Quell-IP nicht in der Whitelist steht.
+Wichtig: Fail2Ban sperrt IP-Adressen. Auch ein Admin mit SSH-Key kann sich aussperren, wenn die eigene Quell-IP nicht in der Whitelist steht.
 
 ---
 
@@ -46,9 +33,9 @@ APACHE_ERROR_LOG="/var/log/apache2/*error.log"
 SSH_PORTS="22,3333"
 ```
 
-`203.0.113.55` ist nur ein Platzhalter. Verwende hier echte Admin-, VPN- oder Jump-Host-Adressen.
+`203.0.113.55` ist nur ein Platzhalter. Verwende die eLedia IP
 
-Wenn du unsicher bist, nimm lieber zuerst nur SSH in Betrieb und prüfe danach die Web-Jails gegen echte Logs.
+Wenn du unsicher bist, nimm lieber zuerst nur SSH in Betrieb und prüfe danach die Web-Jails gegen Logs.
 
 ---
 
@@ -61,7 +48,7 @@ systemctl status nftables --no-pager
 test -d /var/log/apache2 && echo "Apache log dir exists"
 ```
 
-Wenn `nft` fehlt, installiere und aktiviere nftables zuerst. Diese Anleitung installiert nftables nicht automatisch, weil die Firewall-Policy bewusst gesetzt werden muss.
+Wenn `nft` fehlt, installiere und aktiviere nftables zuerst, weil die Firewall-Policy bewusst gesetzt werden muss.
 
 ---
 
@@ -72,7 +59,7 @@ sudo apt update
 sudo apt install fail2ban
 ```
 
-Das Paket kann den Dienst direkt starten. Das ist okay. Wichtig ist nur: neue Dateien erst schreiben, danach `fail2ban-client -t` ausführen und erst dann Reload oder Restart machen.
+Das Paket kann den Service direkt starten. Das ist nicht schlimm, aber danach gilt: erst neue Dateien schreiben, dann `fail2ban-client -t`, dann Reload oder Restart.
 
 ---
 
@@ -131,19 +118,19 @@ sudo chmod 0644 /etc/fail2ban/fail2ban.d/99-web-protection.local
 
 ## 7. Filter installieren
 
-Die statischen Filter liegen in der Rolle unter `roles/install-fail2ban/files/`.
+Die statischen Filter liegen in der Rolle unter `install-fail2ban/files/`.
 
 ```bash
 sudo install -m 0644 -o root -g root \
-  roles/install-fail2ban/files/apache-malicious-paths.conf \
+  install-fail2ban/files/apache-malicious-paths.conf \
   /etc/fail2ban/filter.d/apache-malicious-paths.conf
 
 sudo install -m 0644 -o root -g root \
-  roles/install-fail2ban/files/moodle-badbots.conf \
+  install-fail2ban/files/moodle-badbots.conf \
   /etc/fail2ban/filter.d/moodle-badbots.conf
 
 sudo install -m 0644 -o root -g root \
-  roles/install-fail2ban/files/apache-scanburst.conf \
+  install-fail2ban/files/apache-scanburst.conf \
   /etc/fail2ban/filter.d/apache-scanburst.conf
 ```
 
@@ -360,7 +347,7 @@ Nur wenn diese Prüfung erfolgreich ist, darfst du den Dienst starten, neu laden
 
 ---
 
-## 11. Dienst starten oder neu laden
+## 11. Service starten oder neu laden
 
 Erstaktivierung:
 
@@ -417,7 +404,7 @@ Wenn eine erwartete Jail fehlt, nicht weiterarbeiten, sondern zuerst die Konfigu
 
 ---
 
-## 13. Filter gegen echte Logs testen
+## 13. Filter gegen Logs testen
 
 ```bash
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-malicious-paths.conf
@@ -427,7 +414,7 @@ sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-un
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-scanburst.conf
 ```
 
-Bei False Positives wird der Filter enger gemacht oder ein autorisierter Scanner über `ignoreregex` ausgenommen. Große Netze gehören nicht aus Bequemlichkeit in `ignoreip`.
+Bei False Positives: Filter enger machen oder autorisierte Scanner über `ignoreregex` ausnehmen. Nicht aus Bequemlichkeit große Netze in `ignoreip` aufnehmen.
 
 ---
 
@@ -437,7 +424,7 @@ Bei False Positives wird der Filter enger gemacht oder ein autorisierter Scanner
 sudo nft list ruleset
 ```
 
-Nach echten Treffern sollten Fail2Ban-Tabellen, Chains oder Sets sichtbar sein. Test-Bans nur in einem Wartungsfenster setzen, damit du dich nicht selbst aussperrst.
+Nach Treffern sollten Fail2Ban-Tabellen, Chains oder Sets sichtbar sein. Test-Bans nur in einem Wartungsfenster setzen, damit du dich nicht selbst aussperrst.
 
 ---
 
@@ -471,7 +458,7 @@ sudo fail2ban-client -t
 sudo systemctl restart fail2ban
 ```
 
-Wenn `fail2ban-client -t` nach dem Restore fehlschlägt, Dienst nicht starten. Erst die gemeldete Datei prüfen.
+Wenn `fail2ban-client -t` nach dem Restore fehlschlägt, Service nicht starten. Erst die gemeldete Datei prüfen.
 
 ---
 
@@ -500,4 +487,6 @@ sudo systemctl restart fail2ban
 sudo fail2ban-client status sshd
 ```
 
-Das ist nur der Notfallmodus. Für den vollständigen Webschutz nimm die Jails oben oder, sauberer, direkt die Ansible-Rolle.
+Das ist nur ein Notfallmodus. Für den vollständigen Webschutz nutze die Jails oben oder besser direkt die Ansible-Rolle.
+
+Danke für deine Aufmerksamkeit. Der Server ist nun ausrechend abgesichert.
