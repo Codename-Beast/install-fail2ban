@@ -20,7 +20,7 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Regex-Filter für Web-Pfade, Moodle-Login/Token-Endpunkte und Scanbursts geprüft und präzisiert.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
-- Repository bereinigt
+- Repository der eLedia Konvention und für Infra angepasst.
 
 ### Testing
 - Rolle gegen Debian 13 Server Getestet.
