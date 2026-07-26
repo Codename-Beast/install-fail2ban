@@ -2,35 +2,31 @@
 
 Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
-Die Labels `Added`, `Changed` und `Fixed` bleiben bewusst Englisch.
-
 ---
 
 ## [1.3.0]
 
 ### Added
 
-- Header in allen Task-Dateien der Rolle ergänzt.
-- Handler-Datei `roles/install-fail2ban/handlers/main.yml` ergänzt.
+- Handler-Datei `install-fail2ban/handlers/main.yml` ergänzt.
 - Funktionales Jail `apache-unusual-useragents` für fehlende, leere, überlange und explizite Scanner-User-Agents ergänzt.
 - `moodle-badbots` als eigenes Moodle-Jail ergänzt.
-- GitLab-CI für Syntax, Template-Rendering, Regex-Fixtures und `ansible-lint` ergänzt.
 - Projektkonfiguration für `ansible-lint` ergänzt.
-- Headerbild `assets/elediav2.png` für die README ergänzt.
 
 ### Changed
 
-- Fail2Ban-Dienstaktionen laufen wieder über Ansible-Handler.
 - Paketinstallation prüft installierte Pakete vorab und überspringt `apt`, wenn `fail2ban` bereits installiert ist.
-- README stärker auf Quickstart, Betrieb, Prüfung und Rollback fokussiert.
-- `MANUELL.md` redaktionell geglättet und als praxistaugliche manuelle Anleitung überarbeitet.
 - Scanner-Templates filtern leere Werte, deduplizieren Listen und bleiben auch bei leeren Scanner-Listen valide.
 - Regex-Filter für Web-Pfade, Moodle-Login/Token-Endpunkte und Scanbursts geprüft und präzisiert.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
-- Task-Dateien enthalten kurze deutsche Dev-Kommentare an den wichtigen Stellen.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
-- Rollen-Dokumentation beschreibt den aktuellen Handler-, nftables- und User-Agent-Stand.
-- Repository enthält keine eigenen Shell- oder Python-Testdateien mehr.
+- Repository bereinigt
+
+### Testing
+- Rolle gegen Debian 13 Server Getestet.
+- idempotent Sichergestellt.
+- ansible-core 2.12.10 Support 
+- ansible-core 2.21.2 Support
 
 ---
 
@@ -38,8 +34,7 @@ Die Labels `Added`, `Changed` und `Fixed` bleiben bewusst Englisch.
 
 ### Changed
 
-- Rollenverzeichnis bereinigt und auf die lokale Rolle `install-fail2ban` ausgerichtet.
-- Lint-Policy an die Projektkonvention mit kurzen Modulnamen angepasst.
+- Lint-Policy an die eLeDia konvention mit kurzen Modulnamen angepasst.
 
 ---
 
@@ -47,14 +42,9 @@ Die Labels `Added`, `Changed` und `Fixed` bleiben bewusst Englisch.
 
 ### Added
 
-- `report_only` als kurze Variable für reine Statusabfragen ohne Installation und ohne Dateischreibungen.
+- `report_only` als kurze Variable für reine Statusabfragen ohne Installation.
 - Formatierter Fail2Ban-Statusbericht mit Service-Status, aktiven Jails und Ban-Zählern pro Jail.
 - `MANUELL.md` als Anleitung für die händische Absicherung eines Servers ohne Ansible.
-
-### Changed
-
-- README-Aufrufe auf den Standardlauf über die Inventory-Gruppe reduziert.
-
 ---
 
 ## [1.0.0]
@@ -62,11 +52,7 @@ Die Labels `Added`, `Changed` und `Fixed` bleiben bewusst Englisch.
 ### Added
 
 - Formatierter Statusbericht nach erfolgreicher Installation.
-- Reiner Info-Modus am Anfang des Laufs.
-
-### Changed
-
-- Alte Report-Varianten entfernt und durch eine zentrale Report-Task-Datei ersetzt.
+- Reiner Info-Modus.
 
 ---
 
@@ -79,15 +65,13 @@ Die Labels `Added`, `Changed` und `Fixed` bleiben bewusst Englisch.
 
 ### Changed
 
-- Start und Restart des Dienstes vereinfacht.
+- Start und Restart des Fail2Ban Service vereinfacht.
 
 ---
 
 ## [0.8.0]
 
 ### Changed
-
-- Inline-Python für den nftables-Whitelist-Import entfernt.
 - nftables-Import läuft über `nft -j list ruleset` und Ansible-Filter.
 
 ---
