@@ -113,7 +113,9 @@ fail2ban_scanner_useragents_ignore:
 
 Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind nicht pauschal enthalten. Die können in Monitoring, APIs oder Cronjobs legitim sein.
 
-`moodle-behat-access` überwacht Behat-bezogene Moodle-Pfade nur dann, wenn Apache bereits `404` geloggt hat. Nach mehr als drei Treffern innerhalb von `fail2ban_moodle_behat_access_findtime` wird die Quelle temporär gebannt. Die 404-Ausgabe selbst muss Apache/Moodle liefern; Fail2Ban reagiert erst auf den Logeintrag.
+`moodle-behat-access` überwacht Behat-bezogene Moodle-Pfade bei `200` und `404`. Ein `200` ist ein starkes Signal für öffentlich erreichbare Behat-Dateien und wird mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt. `404` bleibt enthalten, um Scans nach versteckten oder übrig gebliebenen Behat-Pfaden ebenfalls zu erfassen. Die HTTP-Antwort selbst muss Apache/Moodle liefern; Fail2Ban reagiert erst auf den Logeintrag.
+
+Low-and-Slow-Scanning ist die Grenze jedes kurzen Schwellwert-Fensters: Wer z.B. nur wenige 4xx-Requests pro Tag sendet, bleibt unter `apache-scanburst` und erzeugt damit auch keine `recidive`-Eskalation. Dafür gibt es optional `apache-slow-scan`. Das Jail nutzt denselben Filter wie `apache-scanburst`, aber mit langem Zeitraum (`fail2ban_slow_scan_findtime`, Standard `14d`) und niedriger Schwelle (`fail2ban_slow_scan_maxretry`, Standard `7`). Es ist bewusst default-off, weil lange Fenster bei NAT-/Campus-IP-Adressen schneller FalsePositives erzeugen können.
 
 ---
 
@@ -163,7 +165,12 @@ fail2ban_scanburst_maxretry: 80
 fail2ban_scanburst_findtime: 5m
 fail2ban_scanburst_bantime: 12h
 
-fail2ban_moodle_behat_access_maxretry: 4
+fail2ban_slow_scan_enabled: false
+fail2ban_slow_scan_maxretry: 7
+fail2ban_slow_scan_findtime: 14d
+fail2ban_slow_scan_bantime: 7d
+
+fail2ban_moodle_behat_access_maxretry: 1
 fail2ban_moodle_behat_access_findtime: 10m
 fail2ban_moodle_behat_access_bantime: 1h
 fail2ban_moodle_behat_access_ignoreip: []

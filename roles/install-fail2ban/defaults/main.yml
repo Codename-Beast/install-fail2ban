@@ -151,9 +151,9 @@ fail2ban_moodle_badbots_maxtime: 7d
 fail2ban_moodle_badbots_rndtime: 5m
 
 # -- Moodle Behat exposure watch ------------------------------------
-# Only 404 responses for Behat-related paths are counted. Ban after more than
-# three probes in the findtime window, not on a single typo or one-off scan.
-fail2ban_moodle_behat_access_maxretry: 4
+# HTTP 200 on a Behat path means public exposure and is banned immediately.
+# HTTP 404 is still counted to catch probing for hidden/leftover Behat paths.
+fail2ban_moodle_behat_access_maxretry: 1
 fail2ban_moodle_behat_access_findtime: 10m
 fail2ban_moodle_behat_access_bantime: 1h
 # Optional jail-local exemptions. Use this for CI/staging Behat runners that
@@ -189,6 +189,19 @@ fail2ban_scanburst_maxtime: 90d
 fail2ban_scanburst_multipliers: "1 2 6 14 60 180"
 fail2ban_scanburst_rndtime: 10m
 fail2ban_scanburst_overalljails: false
+
+# -- Optional low-and-slow scan detection ---------------------------
+# Same signal as apache-scanburst, but over a much longer window. Keep default
+# off to avoid false positives for large NAT/campus networks; enable per tenant
+# when targeted slow scans are a realistic risk.
+fail2ban_slow_scan_enabled: false
+fail2ban_slow_scan_maxretry: 7
+fail2ban_slow_scan_findtime: 14d
+fail2ban_slow_scan_bantime: 7d
+fail2ban_slow_scan_maxtime: 90d
+fail2ban_slow_scan_multipliers: "1 2 4 8"
+fail2ban_slow_scan_rndtime: 30m
+fail2ban_slow_scan_overalljails: false
 
 # -- Optional built-in Apache jails --------------------------------
 fail2ban_apache_auth_maxretry: 5

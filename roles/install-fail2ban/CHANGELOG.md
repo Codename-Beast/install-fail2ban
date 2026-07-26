@@ -11,8 +11,8 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Handler-Datei `install-fail2ban/handlers/main.yml` ergänzt.
 - Funktionales Jail `apache-unusual-useragents` für fehlende, leere, überlange und explizite Scanner-User-Agents ergänzt.
 - `moodle-badbots` als eigenes Moodle-Jail ergänzt.
-- Funktionales Jail `moodle-behat-access` ergänzt: überwacht Behat-bezogene Moodle-Pfade nur bei HTTP 404 und bannt temporär nach mehr als drei Treffern.
-- Projektkonfiguration für `ansible-lint` ergänzt.
+- Funktionales Jail `moodle-behat-access` ergänzt: überwacht Behat-bezogene Moodle-Pfade bei HTTP 200 und 404.
+- Optionales Jail `apache-slow-scan` ergänzt, um geduldige 4xx-Scans über längere Zeiträume zu erfassen; standardmäßig deaktiviert wegen FalsePositive-Risiko bei NAT-/Campus-Netzen.
 - Ausführlicher Kommentar-Header (Regex-Breakdown) in allen Filter-Dateien (`apache-malicious-paths.conf`, `apache-scanburst.conf`, `moodle-badbots.conf`, `apache-scanner-useragents.conf.j2`, `apache-unusual-useragents.conf.j2`) ergänzt, um Aufbau und Zweck jeder Regex-Zeile nachvollziehbar zu dokumentieren.
 - `Config | flush pending Fail2Ban handlers` (`meta: flush_handlers`) nach dem letzten Config-Render-Task ergänzt, um sicherzustellen, dass Validierung und Reload/Restart innerhalb desselben Rollenlaufs erfolgen, bevor nachfolgende Tasks oder Rollen greifen.
 - Hinweis-Kommentar in `moodle-badbots.conf` zu `login/token.php` ergänzt: Dokumentiert das Risiko von Sammel-Bans bei geteilten IPs (Schul-/Campus-NAT, CGNAT) durch die Moodle Mobile App sowie mögliche Gegenmaßnahmen (Jail-Tuning, `ignoreip`, Moodle-eigener Konto-Lockout).
@@ -28,6 +28,8 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
 - Fail2Ban-Regex-Checks prüfen jetzt konkrete Trefferzahlen für Attack-, Clean- und Ignore-Fixtures, damit ein 0-Treffer-Filter die CI nicht mehr grün passieren kann.
+- Behat-Zugriffe mit HTTP 200 werden als öffentliche Exposition gewertet und mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt; HTTP 404 bleibt als Probe-Erkennung enthalten.
+- README dokumentiert die Low-and-Slow-Grenze kurzer Schwellwert-Jails und die optionale Gegenmaßnahme `apache-slow-scan`.
 - Repository der eLedia Konvention und für Infra angepasst.
 
 ### Testing

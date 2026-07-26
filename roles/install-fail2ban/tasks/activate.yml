@@ -46,6 +46,7 @@
         + (['apache-scanner-useragents'] if (fail2ban_scanner_useragents_enabled | bool) else [])
         + (['apache-unusual-useragents'] if (fail2ban_unusual_useragents_enabled | bool) else [])
         + (['apache-scanburst'] if (fail2ban_scanburst_enabled | bool) else [])
+        + (['apache-slow-scan'] if (fail2ban_slow_scan_enabled | bool) else [])
         + (['apache-overflows'] if (fail2ban_overflows_enabled | bool) else [])
         + (['apache-shellshock'] if (fail2ban_shellshock_enabled | bool) else [])
         + (['apache-auth'] if (fail2ban_apache_auth_enabled | bool) else [])

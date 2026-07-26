@@ -78,8 +78,8 @@ bantime.maxtime = {{ fail2ban_moodle_badbots_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
 
 # -----------------------------------------------------------------------------
-# Moodle Behat exposure: repeated 404 probes for leftover Behat paths.
-# Fail2Ban reacts after the 404 was logged; webserver/app config must hide files first.
+# Moodle Behat exposure: public 200 responses and probes for leftover Behat paths.
+# A 200 response is high confidence exposure and is banned immediately.
 # -----------------------------------------------------------------------------
 [moodle-behat-access]
 enabled = {{ fail2ban_moodle_behat_access_enabled | bool | ternary('true', 'false') }}
@@ -168,6 +168,31 @@ bantime.multipliers = {{ fail2ban_scanburst_multipliers }}
 bantime.maxtime = {{ fail2ban_scanburst_maxtime }}
 bantime.rndtime = {{ fail2ban_scanburst_rndtime }}
 bantime.overalljails = {{ fail2ban_scanburst_overalljails | bool | ternary('true', 'false') }}
+
+# -----------------------------------------------------------------------------
+# Low-and-slow scan detection across the same client-error signal as scanburst.
+# Optional because long windows can hit NAT/campus IPs on noisy public systems.
+# -----------------------------------------------------------------------------
+[apache-slow-scan]
+enabled = {{ fail2ban_slow_scan_enabled | bool | ternary('true', 'false') }}
+filter = apache-scanburst
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_slow_scan_maxretry }}
+findtime = {{ fail2ban_slow_scan_findtime }}
+bantime = {{ fail2ban_slow_scan_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_slow_scan_multipliers }}
+bantime.maxtime = {{ fail2ban_slow_scan_maxtime }}
+bantime.rndtime = {{ fail2ban_slow_scan_rndtime }}
+bantime.overalljails = {{ fail2ban_slow_scan_overalljails | bool | ternary('true', 'false') }}
 
 # -----------------------------------------------------------------------------
 # Built-in Apache overflow filter.
