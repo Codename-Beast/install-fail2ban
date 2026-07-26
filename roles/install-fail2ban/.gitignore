@@ -1,0 +1,7 @@
+.venv*/
+*.retry
+__pycache__/
+.pytest_cache/
+.cache/
+*.tar.gz
+tests/.generated/
