@@ -1,0 +1,6 @@
+198.51.100.130 - - [26/Jul/2026:05:20:00 +0200] "GET /course/view.php?name=solr-schulung HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+198.51.100.131 - - [26/Jul/2026:05:20:01 +0200] "GET /course/view.php?name=haproxy-monitoring HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+198.51.100.132 - - [26/Jul/2026:05:20:02 +0200] "GET /theme/image.php/core/solr/123/icon HTTP/1.1" 200 1024 "-" "Mozilla/5.0"
+198.51.100.133 - - [26/Jul/2026:05:20:03 +0200] "GET /mod/page/view.php?id=haproxy-stats HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.134 - - [26/Jul/2026:05:20:04 +0200] "GET /solrsearch/index.php?q=test HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.135 - - [26/Jul/2026:05:20:05 +0200] "GET /solr/core/select?q=course HTTP/1.1" 200 1024 "-" "InternalSearchProxy/1.0"

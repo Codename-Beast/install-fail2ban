@@ -103,6 +103,7 @@
     - { name: "apache-auth", enabled: "{{ fail2ban_apache_auth_enabled }}" }
     - { name: "apache-badbots", enabled: "{{ fail2ban_apache_badbots_enabled }}" }
     - { name: "apache-botsearch", enabled: "{{ fail2ban_apache_botsearch_enabled }}" }
+    - { name: "apache-fakegooglebot", enabled: "{{ fail2ban_apache_fakegooglebot_enabled }}" }
   register: fail2ban_builtin_filter_stats
   loop_control:
     label: "{{ item.name }}"
@@ -140,7 +141,10 @@
     mode: "0644"
   loop:
     - apache-malicious-paths.conf
+    - apache-infra-admin-exposure.conf
     - moodle-badbots.conf
+    - moodle-webservice-abuse.conf
+    - moodle-password-reset-abuse.conf
     - moodle-behat-access.conf
     - apache-scanburst.conf
   register: fail2ban_static_filter_config
@@ -186,5 +190,7 @@
     - Validate Fail2Ban config
     - Reload Fail2Ban
 
+# Force validation/reload now, not at play end. Later roles/tasks in the same
+# play should never continue after this role has rendered invalid Fail2Ban files.
 - name: "Config | flush pending Fail2Ban handlers"
   meta: flush_handlers

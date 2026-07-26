@@ -53,18 +53,26 @@
 
 - name: "Preflight | detect enabled Apache jails"
   set_fact:
+    # Every new Apache access/error-log jail must be added here. Otherwise an
+    # enabled web jail can skip the Apache logdir preflight by accident.
     fail2ban_apache_jails_enabled: >-
       {{
         (fail2ban_malicious_paths_enabled | bool)
         or (fail2ban_moodle_badbots_enabled | bool)
+        or (fail2ban_moodle_webservice_abuse_enabled | bool)
+        or (fail2ban_moodle_password_reset_abuse_enabled | bool)
+        or (fail2ban_moodle_behat_access_enabled | bool)
         or (fail2ban_scanner_useragents_enabled | bool)
         or (fail2ban_unusual_useragents_enabled | bool)
         or (fail2ban_scanburst_enabled | bool)
+        or (fail2ban_slow_scan_enabled | bool)
+        or (fail2ban_infra_admin_exposure_enabled | bool)
         or (fail2ban_overflows_enabled | bool)
         or (fail2ban_shellshock_enabled | bool)
         or (fail2ban_apache_auth_enabled | bool)
         or (fail2ban_apache_badbots_enabled | bool)
         or (fail2ban_apache_botsearch_enabled | bool)
+        or (fail2ban_apache_fakegooglebot_enabled | bool)
       }}
 
 - name: "Preflight | check Apache log dir"

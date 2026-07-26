@@ -5,6 +5,8 @@
 # Version: v1.3
 # =========================================
 ---
+# Handler definition order is execution order in Ansible; notify-list order in
+# tasks does not control it. Keep validation before restart/reload.
 - name: Validate Fail2Ban config
   command:
     cmd: fail2ban-client -t

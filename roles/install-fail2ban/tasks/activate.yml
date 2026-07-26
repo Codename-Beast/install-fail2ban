@@ -41,7 +41,10 @@
         []
         + (['sshd'] if (fail2ban_sshd_enabled | bool) else [])
         + (['apache-malicious-paths'] if (fail2ban_malicious_paths_enabled | bool) else [])
+        + (['apache-infra-admin-exposure'] if (fail2ban_infra_admin_exposure_enabled | bool) else [])
         + (['moodle-badbots'] if (fail2ban_moodle_badbots_enabled | bool) else [])
+        + (['moodle-webservice-abuse'] if (fail2ban_moodle_webservice_abuse_enabled | bool) else [])
+        + (['moodle-password-reset-abuse'] if (fail2ban_moodle_password_reset_abuse_enabled | bool) else [])
         + (['moodle-behat-access'] if (fail2ban_moodle_behat_access_enabled | bool) else [])
         + (['apache-scanner-useragents'] if (fail2ban_scanner_useragents_enabled | bool) else [])
         + (['apache-unusual-useragents'] if (fail2ban_unusual_useragents_enabled | bool) else [])
@@ -52,6 +55,7 @@
         + (['apache-auth'] if (fail2ban_apache_auth_enabled | bool) else [])
         + (['apache-badbots'] if (fail2ban_apache_badbots_enabled | bool) else [])
         + (['apache-botsearch'] if (fail2ban_apache_botsearch_enabled | bool) else [])
+        + (['apache-fakegooglebot'] if (fail2ban_apache_fakegooglebot_enabled | bool) else [])
         + (['recidive'] if (fail2ban_recidive_enabled | bool) else [])
       }}
 

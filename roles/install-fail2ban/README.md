@@ -51,13 +51,24 @@ Standardmäßig aktiv:
 - `sshd`
 - `apache-malicious-paths`
 - `moodle-badbots`
+- `moodle-webservice-abuse`
+- `moodle-password-reset-abuse`
 - `moodle-behat-access`
 - `apache-scanner-useragents`
 - `apache-unusual-useragents`
 - `apache-scanburst`
 - `apache-overflows`
 - `apache-shellshock`
+- `apache-badbots`
 - `recidive`
+
+Default-off, bewusst nur nach Topologie-/Logprüfung aktivieren:
+
+- `apache-infra-admin-exposure`
+- `apache-fakegooglebot`
+- `apache-slow-scan`
+- `apache-auth`
+- `apache-botsearch`
 
 Hinweis: `apache-badbots` ist in dieser Rolle aktiv, sollte aber wie alle breiteren Bot-Filter gegen echte Logs geprüft werden.
 
@@ -113,9 +124,19 @@ fail2ban_scanner_useragents_ignore:
 
 Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind nicht pauschal enthalten. Die können in Monitoring, APIs oder Cronjobs legitim sein.
 
+
+`moodle-webservice-abuse` zählt GET/POST-Aufrufe auf die echten Moodle-Webservice-Ausführungsendpunkte (`webservice/rest/server.php`, `webservice/xmlrpc/server.php`, `webservice/soap/server.php`). Das Jail ist bewusst threshold-basiert: Mobile Apps und Integrationen erzeugen legitime API-Last, deshalb liegt `maxretry` mit Standard `60` höher als bei `moodle-badbots`. Bekannte Integrations-Backends können jail-spezifisch über `fail2ban_moodle_webservice_abuse_ignoreip` ausgenommen werden, ohne sie global aus allen Jails herauszunehmen.
+
+`moodle-password-reset-abuse` zählt POSTs auf `login/forgot_password.php`, um Account-Enumeration über viele Reset-Versuche zu erkennen. Es ist ebenfalls threshold-basiert, aber mit niedrigerem Standard `maxretry: 8`, weil ein echter Nutzer dieses Formular normalerweise nicht mehrfach in kurzer Zeit absendet. Einzelne legitime Reset-Requests zählen als Ereignis, lösen allein aber keinen Ban aus.
+
 `moodle-behat-access` überwacht Behat-bezogene Moodle-Pfade bei `200` und `404`. Ein `200` ist ein starkes Signal für öffentlich erreichbare Behat-Dateien und wird mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt. `404` bleibt enthalten, um Scans nach versteckten oder übrig gebliebenen Behat-Pfaden ebenfalls zu erfassen. Die erste Sperre bleibt bewusst temporär, weil dieses Jail auch 404-Probes enthält; Wiederholungstäter eskalieren über `bantime.increment` bis maximal `fail2ban_moodle_behat_access_maxtime`. Die HTTP-Antwort selbst muss Apache/Moodle liefern; Fail2Ban reagiert erst auf den Logeintrag.
 
-Low-and-Slow-Scanning ist die Grenze jedes kurzen Schwellwert-Fensters: Wer z.B. nur wenige 4xx-Requests pro Tag sendet, bleibt unter `apache-scanburst` und erzeugt damit auch keine `recidive`-Eskalation. Dafür gibt es optional `apache-slow-scan`. Das Jail nutzt denselben Filter wie `apache-scanburst`, aber mit langem Zeitraum (`fail2ban_slow_scan_findtime`, Standard `14d`) und niedriger Schwelle (`fail2ban_slow_scan_maxretry`, Standard `7`). Es ist bewusst default-off, weil lange Fenster bei NAT-/Campus-IP-Adressen schneller FalsePositives erzeugen können.
+
+`apache-infra-admin-exposure` ist eine default-off Zusatzabsicherung gegen versehentlich öffentlich erreichbare Solr-Admin- und HAProxy-Stats-Pfade auf demselben Apache/Moodle-Reverse-Proxy. Sie ersetzt keine Netzwerksegmentierung: Solr Admin und HAProxy Stats gehören auf interne Interfaces, geschützte VHosts oder separate Logpfade. Aktivieren nur nach Prüfung der echten Access-Logs mit `fail2ban-regex` und nur, wenn Monitoring-Zugriffe wie `/haproxy?stats` nicht über denselben überwachten Logpfad laufen oder sauber per IP ausgenommen sind. Bekannte interne Monitoring-/Admin-Quellen können nur für diese Jail über `fail2ban_infra_admin_exposure_ignoreip` ausgenommen werden; diese Ausnahme muss eng bleiben und ersetzt den Logtest nicht. Generische Solr-Select-Endpunkte werden bewusst nicht gematcht, um Search-Proxy-False-Positives zu vermeiden.
+
+`apache-fakegooglebot` nutzt den Fail2Ban-Built-in-Filter samt `ignorecommand` für Reverse-DNS-Double-Check. Die Jail ist default-off, weil sie DNS-Lookups benötigt und damit bewusst vom sonstigen Rollenstandard `fail2ban_usedns: "no"` abweicht. DNS-Lookups können Log-Scanning verlangsamen oder bei Resolver-Problemen Latenz erzeugen. Aktivieren nur, wenn der Built-in-Filter und das Ignorecommand auf dem Zielhost vorhanden sind; die Rolle prüft das bei aktivierter Jail vor dem Rendern.
+
+Low-and-Slow-Scanning ist die Grenze jedes kurzen Schwellwert-Fensters: Wer z.B. nur wenige 4xx-Requests pro Tag sendet, bleibt unter `apache-scanburst` und erzeugt damit auch keine `recidive`-Eskalation. Dafür gibt es optional `apache-slow-scan`. Das Jail nutzt denselben Filter wie `apache-scanburst`, aber mit langem Zeitraum (`fail2ban_slow_scan_findtime`, Standard `14d`) und niedriger Schwelle (`fail2ban_slow_scan_maxretry`, Standard `7`). Es ist bewusst default-off, weil lange Fenster bei NAT-/Campus-IP-Adressen schneller False Positives erzeugen können.
 
 ---
 
@@ -132,7 +153,7 @@ Autorisierte Scanner kommen in die Ignore-Liste:
 
 ```yaml
 fail2ban_scanner_useragents_ignore:
-  - eLeSiaSecurityScanner
+  - eLeDiaSecurityScanner
 ```
 
 Neue verdächtige Pfade ergänzt du im Filter:
@@ -147,7 +168,46 @@ Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filte
 |backup\.zip|database\.sql
 ```
 
-Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst kommt es zu FalsePositives.
+Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst kommt es zu False Positives.
+
+---
+
+## ✅ Wiederholbare Qualitätschecks
+
+Zusätzliche Repo-Checks für bekannte Fehlerklassen:
+
+```bash
+python3 tests/scripts/check_fail2ban_unused_defaults.py
+python3 tests/scripts/check_fail2ban_undefined_refs.py
+python3 tests/scripts/check_fail2ban_percent_interpolation.py
+```
+
+Diese Checks prüfen ungenutzte Defaults, ungesicherte Jinja-Referenzen und ConfigParser-Interpolationsfallen durch literale Prozentzeichen in Fail2Ban-Filterdateien.
+
+---
+
+## 📋 Jail-Überblick
+
+| Jail | Konfidenz/Signal | Default | Standard-Verhalten |
+|---|---|---:|---|
+| `sshd` | Auth/Behavioral | enabled | progressiv `1h` bis `7d` |
+| `apache-malicious-paths` | High-Confidence Path | enabled | permanent |
+| `moodle-badbots` | Behavioral/Threshold | enabled | progressiv `2h` bis `7d` |
+| `moodle-webservice-abuse` | Behavioral/Threshold | enabled | progressiv `2h` bis `7d` |
+| `moodle-password-reset-abuse` | Behavioral/Threshold | enabled | progressiv `4h` bis `14d` |
+| `moodle-behat-access` | High-Confidence/Probe gemischt | enabled | progressiv `1h` bis `30d` |
+| `apache-scanner-useragents` | High-Confidence UA | enabled | permanent |
+| `apache-unusual-useragents` | UA-Anomalie | enabled | fix `1h`, Wiederholung über `recidive` |
+| `apache-scanburst` | Behavioral/Burst | enabled | progressiv `12h` bis `90d` |
+| `apache-slow-scan` | Behavioral/Low-and-Slow | disabled | progressiv `7d` bis `90d` |
+| `apache-infra-admin-exposure` | High-Confidence Infra-Pfad | disabled | permanent |
+| `apache-overflows` | Built-in High-Confidence | enabled | permanent |
+| `apache-shellshock` | Built-in High-Confidence | enabled | permanent |
+| `apache-auth` | Built-in Auth | disabled | fix `1d` |
+| `apache-fakegooglebot` | Built-in High-Confidence DNS | disabled | permanent |
+| `apache-badbots` | Built-in Bot-Liste | enabled | permanent |
+| `apache-botsearch` | Built-in Bot/Search | disabled | fix `1d` |
+| `recidive` | Wiederholungstäter | enabled | permanent all-ports |
 
 ---
 
@@ -164,6 +224,27 @@ fail2ban_sshd_bantime: 1h
 fail2ban_scanburst_maxretry: 80
 fail2ban_scanburst_findtime: 5m
 fail2ban_scanburst_bantime: 12h
+
+fail2ban_moodle_webservice_abuse_maxretry: 60
+fail2ban_moodle_webservice_abuse_findtime: 10m
+fail2ban_moodle_webservice_abuse_bantime: 2h
+fail2ban_moodle_webservice_abuse_ignoreip: []
+
+fail2ban_moodle_password_reset_abuse_maxretry: 8
+fail2ban_moodle_password_reset_abuse_findtime: 10m
+fail2ban_moodle_password_reset_abuse_bantime: 4h
+
+fail2ban_infra_admin_exposure_enabled: false
+fail2ban_infra_admin_exposure_maxretry: 1
+fail2ban_infra_admin_exposure_findtime: 1d
+fail2ban_infra_admin_exposure_bantime: -1
+fail2ban_infra_admin_exposure_ignoreip: []
+
+fail2ban_apache_fakegooglebot_enabled: false
+fail2ban_apache_fakegooglebot_maxretry: 1
+fail2ban_apache_fakegooglebot_findtime: 1d
+fail2ban_apache_fakegooglebot_bantime: -1
+fail2ban_apache_fakegooglebot_usedns: "warn"
 
 fail2ban_slow_scan_enabled: false
 fail2ban_slow_scan_maxretry: 7
@@ -216,6 +297,9 @@ sudo rm -f \
   /etc/fail2ban/filter.d/apache-malicious-paths.conf \
   /etc/fail2ban/filter.d/moodle-badbots.conf \
   /etc/fail2ban/filter.d/moodle-behat-access.conf \
+  /etc/fail2ban/filter.d/apache-infra-admin-exposure.conf \
+  /etc/fail2ban/filter.d/moodle-password-reset-abuse.conf \
+  /etc/fail2ban/filter.d/moodle-webservice-abuse.conf \
   /etc/fail2ban/filter.d/apache-scanner-useragents.conf \
   /etc/fail2ban/filter.d/apache-unusual-useragents.conf \
   /etc/fail2ban/filter.d/apache-scanburst.conf \
@@ -232,7 +316,7 @@ sudo systemctl restart fail2ban
 
 ## 📚 Weitere Dokumente
 
-- `MANUELL.md`: händische Absicherung eines Servers
+- `MANUELL.md`: bewusst schlanker Basis-/Notfall-Auszug; vollständige Jail-Übersicht bleibt hier im README
 - `CHANGELOG.md`: Änderungen und Versionen
 
 ## 🧾 Unterstützte Ansible-Versionen

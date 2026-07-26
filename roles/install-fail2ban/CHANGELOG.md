@@ -4,16 +4,20 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ---
 
-## [1.3.0]
+## [1.4.0]
 
 ### Added
 
 - Handler-Datei `install-fail2ban/handlers/main.yml` ergänzt.
 - Funktionales Jail `apache-unusual-useragents` für fehlende, leere, überlange und explizite Scanner-User-Agents ergänzt.
 - `moodle-badbots` als eigenes Moodle-Jail ergänzt.
+- Funktionale Jails `moodle-webservice-abuse` und `moodle-password-reset-abuse` ergänzt, um Webservice-Volumen und Passwort-Reset-Enumeration threshold-basiert zu erkennen.
+- Default-off Jail `apache-infra-admin-exposure` ergänzt, um versehentlich öffentlich erreichbare Solr-Admin- und HAProxy-Stats-Pfade high-confidence zu erkennen.
+- `apache-infra-admin-exposure` unterstützt eine jail-spezifische `ignoreip` für eng definierte Monitoring-/Admin-Quellen.
+- Default-off Built-in Jail `apache-fakegooglebot` ergänzt; Aktivierung prüft den vorhandenen Fail2Ban-Filter und dokumentiert die DNS-Lookup-Abweichung.
 - Funktionales Jail `moodle-behat-access` ergänzt: überwacht Behat-bezogene Moodle-Pfade bei HTTP 200 und 404.
-- Optionales Jail `apache-slow-scan` ergänzt, um geduldige 4xx-Scans über längere Zeiträume zu erfassen; standardmäßig deaktiviert wegen FalsePositive-Risiko bei NAT-/Campus-Netzen.
-- Ausführlicher Kommentar-Header (Regex-Breakdown) in allen Filter-Dateien (`apache-malicious-paths.conf`, `apache-scanburst.conf`, `moodle-badbots.conf`, `apache-scanner-useragents.conf.j2`, `apache-unusual-useragents.conf.j2`) ergänzt, um Aufbau und Zweck jeder Regex-Zeile nachvollziehbar zu dokumentieren.
+- Optionales Jail `apache-slow-scan` ergänzt, um geduldige 4xx-Scans über längere Zeiträume zu erfassen; standardmäßig deaktiviert wegen False-Positive-Risiko bei NAT-/Campus-Netzen.
+- Ausführlicher Kommentar-Header (Regex-Breakdown) in allen Filter-Dateien (`apache-malicious-paths.conf`, `apache-scanburst.conf`, `moodle-badbots.conf`, `moodle-behat-access.conf`, `moodle-webservice-abuse.conf`, `moodle-password-reset-abuse.conf`, `apache-infra-admin-exposure.conf`, `apache-scanner-useragents.conf.j2`, `apache-unusual-useragents.conf.j2`) ergänzt, um Aufbau und Zweck jeder Regex-Zeile nachvollziehbar zu dokumentieren.
 - `Config | flush pending Fail2Ban handlers` (`meta: flush_handlers`) nach dem letzten Config-Render-Task ergänzt, um sicherzustellen, dass Validierung und Reload/Restart innerhalb desselben Rollenlaufs erfolgen, bevor nachfolgende Tasks oder Rollen greifen.
 - Hinweis-Kommentar in `moodle-badbots.conf` zu `login/token.php` ergänzt: Dokumentiert das Risiko von Sammel-Bans bei geteilten IPs (Schul-/Campus-NAT, CGNAT) durch die Moodle Mobile App sowie mögliche Gegenmaßnahmen (Jail-Tuning, `ignoreip`, Moodle-eigener Konto-Lockout).
 
@@ -22,16 +26,24 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Paketinstallation prüft installierte Pakete vorab und überspringt `apt`, wenn `fail2ban` bereits installiert ist.
 - Scanner-Templates filtern leere Werte, deduplizieren Listen und bleiben auch bei leeren Scanner-Listen valide.
 - Regex-Filter für Web-Pfade, Moodle-Login/Token-Endpunkte und Scanbursts geprüft und präzisiert.
-- Anker aller Custom-Filter (`apache-malicious-paths`, `apache-scanburst`, `moodle-badbots`, `apache-scanner-useragents`, `apache-unusual-useragents`) von einer generischen `.*"`-Suche auf eine feldgenaue Verankerung direkt hinter dem Zeitstempel (`\[[^\]]+\]\s+"`) umgestellt. Verhindert, dass ein präparierter User-Agent- oder Referer-Wert mit eingebettetem, gefälschtem Request-String (`"GET ... HTTP/1.1"`) den eigentlichen Match verfälscht oder Fehlzählungen in den verhaltensbasierten Jails (`moodle-badbots`, `apache-scanburst`) verursacht.
+- Anker aller Custom-Filter (`apache-malicious-paths`, `apache-scanburst`, `moodle-badbots`, `apache-scanner-useragents`, `apache-unusual-useragents`) von einer generischen `.*"`-Suche auf eine feldgenaue Verankerung direkt hinter dem Zeitstempel (`\[[^\]]*\]\s+"`) umgestellt. Verhindert, dass ein präparierter User-Agent- oder Referer-Wert mit eingebettetem, gefälschtem Request-String (`"GET ... HTTP/1.1"`) den eigentlichen Match verfälscht oder Fehlzählungen in den verhaltensbasierten Jails (`moodle-badbots`, `apache-scanburst`) verursacht.
 - Feld für die Antwortgröße (`size`) in `apache-scanner-useragents` und `apache-unusual-useragents` von optional auf verpflichtend geändert.
 - Scanner-Namen-Erkennung (`sqlmap`, `nikto`, etc.) aus `apache-unusual-useragents` entfernt, da sie sich mit `apache-scanner-useragents` überschnitt und pro Vorfall zwei unabhängige Ban-Events statt eines erzeugte. `apache-unusual-useragents` ist jetzt ausschließlich für fehlende/leere und überlange User-Agents zuständig; die Zählung gegenüber `recidive` ist damit wieder eindeutig einem Ereignis pro Vorfall zugeordnet.
 - README erklärt kurz, wie Scanner-User-Agents und verdächtige Pfade erweitert werden.
 - Template-Rendering prüft jetzt auch leere Scanner-Listen, das Jail-Template und die Exporter-Unit.
 - Fail2Ban-Regex-Checks prüfen jetzt konkrete Trefferzahlen für Attack-, Clean- und Ignore-Fixtures, damit ein 0-Treffer-Filter die CI nicht mehr grün passieren kann.
+- CI deckt jetzt auch Moodle-Webservice-, Passwort-Reset- und Infra-Admin-Exposure-Filter mit Attack- und Clean-Fixtures ab.
 - Behat-Zugriffe mit HTTP 200 werden als öffentliche Exposition gewertet und mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt; HTTP 404 bleibt als Probe-Erkennung enthalten.
 - `moodle-behat-access` eskaliert Wiederholungstäter jetzt progressiv, damit Scanner nach der ersten temporären Sperre nicht stündlich weitermachen können.
 - README dokumentiert die Low-and-Slow-Grenze kurzer Schwellwert-Jails und die optionale Gegenmaßnahme `apache-slow-scan`.
-- Repository der eLedia Konvention und für Infra angepasst.
+- DateDetector-Root-Cause direkt in den Filter-Kommentaren dokumentiert: Fail2Ban entfernt den Timestamp vor `failregex`, daher muss das Timestamp-Feld `[^\]]*` statt `[^\]]+` erlauben.
+- Adminer-Erkennung in `apache-malicious-paths` auf sinnvolle Boundary-Fälle begrenzt, inklusive `adminer_*.php`, ohne breite Teilstring-Treffer.
+- Preflight-Erkennung der Apache-Log-Anforderung um alle neueren Apache-/Moodle-Jails ergänzt.
+- ConfigParser-Interpolationsfalle in `apache-infra-admin-exposure` behoben: literal kodierte Solr-UI-Pfade mit Prozentzeichen werden Fail2Ban-konform escaped.
+- Jail-spezifische `ignoreip`-Variablen für Behat-, Webservice- und Infra-Admin-Ausnahmen ergänzt, damit Ausnahmen nicht global auf alle Jails wirken.
+- Wiederholbare QA-Skripte für ungenutzte Defaults, ungesicherte Jinja-Referenzen und Prozentzeichen-Interpolation unter `tests/scripts/` ergänzt.
+- `MANUELL.md` als bewusst schlanken Basis-/Notfall-Auszug gekennzeichnet; die vollständige Jail-Matrix bleibt im README, um parallele Wahrheiten zu vermeiden.
+- Repository der eLeDia-Konvention und für Infra angepasst.
 
 ### Testing
 
@@ -45,7 +57,7 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ### Changed
 
-- Lint-Policy an die eLeDia konvention mit kurzen Modulnamen angepasst.
+- Lint-Policy an die eLeDia-Konvention mit kurzen Modulnamen angepasst.
 
 ---
 

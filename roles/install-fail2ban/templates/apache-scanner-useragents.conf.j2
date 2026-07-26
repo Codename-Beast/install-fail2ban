@@ -28,6 +28,9 @@
 # match cannot be confused with scanner-name-like text appearing elsewhere in
 # the line (e.g. inside the request path itself).
 #
+# - The pattern anchors directly at the request/user-agent fields; there is no ".*"
+#   before the opening request quote, so forged request strings in referer/User-Agent
+#   fields do not affect counting.
 # Caveat: if the request path/query contains a raw, unescaped double-quote
 # character, Apache's own log line can shift field boundaries before this
 # filter ever sees it. That is a logging characteristic, not something this

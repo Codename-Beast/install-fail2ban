@@ -1,0 +1,8 @@
+198.51.100.120 - - [26/Jul/2026:05:10:00 +0200] "GET /solr/admin HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.121 - - [26/Jul/2026:05:10:01 +0200] "GET /solr/admin/cores?action=STATUS HTTP/1.1" 403 1024 "-" "curl/8.0"
+198.51.100.122 - - [26/Jul/2026:05:10:02 +0200] "GET /solr/%23/ HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+198.51.100.123 - - [26/Jul/2026:05:10:03 +0200] "GET /solr/#/ HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+198.51.100.124 - - [26/Jul/2026:05:10:04 +0200] "GET /haproxy?stats HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.125 - - [26/Jul/2026:05:10:05 +0200] "GET /haproxy;csv HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.126 - - [26/Jul/2026:05:10:06 +0200] "GET /haproxy-stats HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+198.51.100.127 - - [26/Jul/2026:05:10:07 +0200] "HEAD https://moodle.example.test/haproxy_stats HTTP/1.1" 403 0 "-" "Mozilla/5.0"

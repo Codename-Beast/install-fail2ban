@@ -34,6 +34,8 @@
 #   1) missing/empty User-Agent ("-" or whitespace-only)
 #   2) oversized User-Agent (>= fail2ban_unusual_useragents_max_length chars)
 #
+# There is no ".*" before the opening request quote; field boundaries stay
+# positional and crafted referer/User-Agent text does not affect counting.
 # ignoreregex exempts explicitly trusted tools (fail2ban_scanner_useragents_ignore)
 # in case a long-but-legitimate internal tool name would otherwise trip the
 # oversized-UA rule above.

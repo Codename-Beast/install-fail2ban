@@ -3,6 +3,16 @@
 Diese Anleitung beschreibt die händische Variante der Rolle `install-fail2ban` für eLeDia Webserver.
 
 
+> **Hinweis:** Diese Anleitung ist bewusst ein Basis-/Notfall-Auszug. Sie deckt
+> den stabilen Kernbestand ab (SSH, ursprüngliche Apache-/Moodle-Webschutz-Jails,
+> `recidive`) und ersetzt nicht die vollständige Rollenreferenz. Für die aktuelle
+> komplette Jail-Übersicht inklusive Moodle-Webservice/Password-Reset, Behat,
+> Low-and-Slow, Infra-Admin-Exposure und Fake-Googlebot siehe `README.md`,
+> Abschnitt "Jail-Überblick". Neue optionale oder spezialisierte Jails werden
+> nicht automatisch hier nachgezogen, damit es keine zweite vollständige Wahrheit
+> neben der Rolle/README gibt.
+
+
 ---
 
 ## Ziel Zustand
@@ -13,7 +23,7 @@ Am Ende soll der Server so stehen:
 - Bans laufen über nftables.
 - SSH ist über das systemd-Journal geschützt.
 - Die SSH-Ports `22` und `3333` sind abgedeckt.
-- Apache/Moodle-Scans werden über eigene Jails erkannt.
+- Apache/Moodle-Scans werden über den hier dokumentierten Kernbestand eigener Jails erkannt.
 - Wiederholungstäter landen über `recidive` im Allports-Drop.
 - Admin-, VPN- oder Jump-Host-Adressen stehen in `ignoreip`.
 - Vor Start, Reload oder Restart wird immer `fail2ban-client -t` ausgeführt.
@@ -33,7 +43,7 @@ APACHE_ERROR_LOG="/var/log/apache2/*error.log"
 SSH_PORTS="22,3333"
 ```
 
-`203.0.113.55` ist nur ein Platzhalter. Verwende die eLedia IP
+`203.0.113.55` ist nur ein Platzhalter. Verwende die eLeDia-IP
 
 Wenn du unsicher bist, nimm lieber zuerst nur SSH in Betrieb und prüfe danach die Web-Jails gegen Logs.
 
@@ -118,7 +128,7 @@ sudo chmod 0644 /etc/fail2ban/fail2ban.d/99-web-protection.local
 
 ## 7. Filter installieren
 
-Die statischen Filter liegen in der Rolle unter `install-fail2ban/files/`.
+Die statischen Kernfilter liegen in der Rolle unter `install-fail2ban/files/`. Für alle weiteren Filter ist die Rolle/README maßgeblich.
 
 ```bash
 sudo install -m 0644 -o root -g root \
@@ -144,39 +154,16 @@ Kurz zur Einordnung:
 
 ## 8. User-Agent-Filter setzen
 
-Die Rolle rendert diese Filter normalerweise aus Templates. Wenn du manuell arbeitest, legst du sie direkt an.
+Die Rolle rendert diese Filter aus Templates. Damit diese Notfallanleitung keine zweite, veraltende Regex-Wahrheit enthält, werden die Regex-Zeilen hier nicht mehr ausgeschrieben. Für manuelle Arbeit gilt:
 
-Datei:
+1. Wenn das Repo verfügbar ist, rendere die Rolle lokal oder auf einem sicheren Admin-System und kopiere die gerenderten Dateien nach `/etc/fail2ban/filter.d/`:
+   - `apache-scanner-useragents.conf`
+   - `apache-unusual-useragents.conf`
+2. Wenn kein Render möglich ist, lasse diese beiden UA-Jails im Notfall weg und nutze zuerst SSH plus die statischen Kernfilter. Ziehe danach die Ansible-Rolle oder `README.md` nach.
 
-```text
-/etc/fail2ban/filter.d/apache-scanner-useragents.conf
-```
+`apache-scanner-useragents` erkennt klar benannte Scanner. `apache-unusual-useragents` bannt bei fehlendem, leerem oder überlangem User-Agent. Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind bewusst nicht pauschal enthalten.
 
-```ini
-[Definition]
-failregex = ^(?:\S+:\d+\s+)?<HOST>.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:sqlmap|nikto|nmap\ scripting\ engine|masscan|zgrab|zmap|gobuster|dirbuster|dirsearch|feroxbuster|ffuf|wpscan|nuclei|acunetix|nessus|openvas|havij|whatweb|censysinspect|internetmeasurement|jaeles|arachni|wapiti|skipfish)[^"]*"(?:\s+.*)?$
-ignoreregex =
-```
-
-Datei:
-
-```text
-/etc/fail2ban/filter.d/apache-unusual-useragents.conf
-```
-
-```ini
-[Definition]
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"(?:-|\s*)"(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]{256,}"(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:sqlmap|nikto|nmap\ scripting\ engine|masscan|zgrab|zmap|gobuster|dirbuster|dirsearch|feroxbuster|ffuf|wpscan|nuclei|acunetix|nessus|openvas|havij|whatweb|censysinspect|internetmeasurement|jaeles|arachni|wapiti|skipfish)[^"]*"(?:\s+.*)?$
-ignoreregex =
-```
-
-`apache-unusual-useragents` bannt sofort bei fehlendem, leerem, überlangem oder eindeutigem Scanner-User-Agent.
-
-Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind bewusst nicht pauschal enthalten. Solche Clients können in Monitoring, APIs oder Cronjobs legitim sein.
-
-Rechte setzen:
+Rechte setzen, nachdem die Dateien korrekt gerendert/kopiert wurden:
 
 ```bash
 sudo chown root:root /etc/fail2ban/filter.d/apache-scanner-useragents.conf /etc/fail2ban/filter.d/apache-unusual-useragents.conf
@@ -193,7 +180,7 @@ Datei:
 /etc/fail2ban/jail.d/99-apache-moodle-bots.local
 ```
 
-Ersetze `127.0.0.1/8 ::1 203.0.113.55` durch deine echte Whitelist.
+Ersetze `127.0.0.1/8 ::1 203.0.113.55` durch deine echte Whitelist. Der folgende Block ist der bewusst schlanke Kernbestand; die vollständige Jail-Matrix bleibt in der Rolle/README.
 
 ```ini
 [sshd]
@@ -378,7 +365,7 @@ sudo systemctl restart fail2ban
 sudo fail2ban-client status
 ```
 
-Details pro Jail:
+Details pro hier dokumentierter Kern-Jail:
 
 ```bash
 sudo fail2ban-client status sshd
@@ -404,7 +391,7 @@ Wenn eine erwartete Jail fehlt, nicht weiterarbeiten, sondern zuerst die Konfigu
 
 ---
 
-## 13. Filter gegen Logs testen
+## 13. Kernfilter gegen Logs testen
 
 ```bash
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-malicious-paths.conf
@@ -414,7 +401,7 @@ sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-un
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-scanburst.conf
 ```
 
-Bei False Positives: Filter enger machen oder autorisierte Scanner über `ignoreregex` ausnehmen. Nicht aus Bequemlichkeit große Netze in `ignoreip` aufnehmen.
+Bei False Positives: Filter enger machen oder autorisierte Scanner über `ignoreregex` ausnehmen. Nicht aus Bequemlichkeit große Netze in `ignoreip` aufnehmen. Für neue/spezialisierte Filter wie Webservice, Password-Reset, Behat, Slow-Scan oder Infra-Admin-Exposure siehe README.md und die Rollen-Fixtures.
 
 ---
 
@@ -438,6 +425,8 @@ sudo fail2ban-client set recidive unbanip 203.0.113.10
 ---
 
 ## 16. Rollback
+
+Dieser Rollback entfernt nur den in dieser Datei dokumentierten Kernbestand. Falls die vollständige Rolle mit weiteren Jails ausgerollt wurde, nutze die Rollback-Liste aus README.md.
 
 ```bash
 sudo systemctl stop fail2ban
@@ -487,6 +476,4 @@ sudo systemctl restart fail2ban
 sudo fail2ban-client status sshd
 ```
 
-Das ist nur ein Notfallmodus. Für den vollständigen Webschutz nutze die Jails oben oder besser direkt die Ansible-Rolle.
-
-Danke für deine Aufmerksamkeit. Der Server ist nun ausrechend abgesichert.
+Das ist nur ein Notfallmodus. Für den vollständigen Webschutz nutze die Ansible-Rolle und die Jail-Übersicht in README.md.

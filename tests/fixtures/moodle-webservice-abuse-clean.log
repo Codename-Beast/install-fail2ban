@@ -1,0 +1,5 @@
+198.51.100.94 - - [26/Jul/2026:03:20:00 +0200] "GET /webservice/rest/server.php?wstoken=redacted&wsfunction=core_webservice_get_site_info HTTP/1.1" 200 1024 "-" "MoodleMobile/4.4"
+198.51.100.95 - - [26/Jul/2026:03:20:01 +0200] "POST /login/token.php HTTP/1.1" 200 512 "-" "MoodleMobile/4.4"
+198.51.100.96 - - [26/Jul/2026:03:20:02 +0200] "GET /webservice/rest/doc.php HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+198.51.100.97 - - [26/Jul/2026:03:20:03 +0200] "GET /course/view.php?id=42 HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+198.51.100.98 - - [26/Jul/2026:03:20:04 +0200] "GET /theme/image.php/core/webservice/123/icon HTTP/1.1" 200 1234 "-" "Mozilla/5.0"

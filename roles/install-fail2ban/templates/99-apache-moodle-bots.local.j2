@@ -6,6 +6,11 @@
 
 {% set ignoreip_list = (fail2ban_effective_ignoreip | default((fail2ban_base_ignoreip | default([])) + (fail2ban_ignoreip | default([])))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set ignoreip = ignoreip_list | join(' ') %}
+# Jail-local ignore lists are merged per jail, not globally: a CI runner,
+# integration backend, or monitoring host may be safe for one signal but must
+# still be visible to every unrelated jail.
+{% set infra_admin_ignoreip = (ignoreip_list + (fail2ban_infra_admin_exposure_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
+{% set webservice_ignoreip = (ignoreip_list + (fail2ban_moodle_webservice_abuse_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 {% set behat_ignoreip = (ignoreip_list + (fail2ban_moodle_behat_access_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 
 # -----------------------------------------------------------------------------
@@ -76,6 +81,54 @@ bantime.increment = true
 bantime.multipliers = {{ fail2ban_moodle_badbots_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_badbots_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
+
+# -----------------------------------------------------------------------------
+# Moodle Webservice abuse: high-volume API execution after token acquisition.
+# Threshold-based because mobile apps and integrations legitimately use it.
+# -----------------------------------------------------------------------------
+[moodle-webservice-abuse]
+enabled = {{ fail2ban_moodle_webservice_abuse_enabled | bool | ternary('true', 'false') }}
+filter = moodle-webservice-abuse
+port = http,https
+protocol = tcp
+ignoreip = {{ webservice_ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_moodle_webservice_abuse_maxretry }}
+findtime = {{ fail2ban_moodle_webservice_abuse_findtime }}
+bantime = {{ fail2ban_moodle_webservice_abuse_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_moodle_webservice_abuse_multipliers }}
+bantime.maxtime = {{ fail2ban_moodle_webservice_abuse_maxtime }}
+bantime.rndtime = {{ fail2ban_moodle_webservice_abuse_rndtime }}
+
+# -----------------------------------------------------------------------------
+# Moodle password reset abuse: repeated account-enumeration form submissions.
+# Lower threshold than login abuse because normal users rarely repeat this often.
+# -----------------------------------------------------------------------------
+[moodle-password-reset-abuse]
+enabled = {{ fail2ban_moodle_password_reset_abuse_enabled | bool | ternary('true', 'false') }}
+filter = moodle-password-reset-abuse
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_moodle_password_reset_abuse_maxretry }}
+findtime = {{ fail2ban_moodle_password_reset_abuse_findtime }}
+bantime = {{ fail2ban_moodle_password_reset_abuse_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_moodle_password_reset_abuse_multipliers }}
+bantime.maxtime = {{ fail2ban_moodle_password_reset_abuse_maxtime }}
+bantime.rndtime = {{ fail2ban_moodle_password_reset_abuse_rndtime }}
 
 # -----------------------------------------------------------------------------
 # Moodle Behat exposure: public 200 responses and probes for leftover Behat paths.
@@ -169,6 +222,8 @@ bantime.increment = true
 bantime.multipliers = {{ fail2ban_scanburst_multipliers }}
 bantime.maxtime = {{ fail2ban_scanburst_maxtime }}
 bantime.rndtime = {{ fail2ban_scanburst_rndtime }}
+# Keep false unless you intentionally want repeated HTTP error bursts in other
+# jails to extend this jail's escalation history as well.
 bantime.overalljails = {{ fail2ban_scanburst_overalljails | bool | ternary('true', 'false') }}
 
 # -----------------------------------------------------------------------------
@@ -177,6 +232,7 @@ bantime.overalljails = {{ fail2ban_scanburst_overalljails | bool | ternary('true
 # -----------------------------------------------------------------------------
 [apache-slow-scan]
 enabled = {{ fail2ban_slow_scan_enabled | bool | ternary('true', 'false') }}
+# Reuse the scanburst filter deliberately: same 4xx signal, much longer window.
 filter = apache-scanburst
 port = http,https
 protocol = tcp
@@ -194,6 +250,8 @@ bantime.increment = true
 bantime.multipliers = {{ fail2ban_slow_scan_multipliers }}
 bantime.maxtime = {{ fail2ban_slow_scan_maxtime }}
 bantime.rndtime = {{ fail2ban_slow_scan_rndtime }}
+# Same semantics as scanburst; default false keeps this long-window escalation
+# local to slow-scan instead of coupling it to every other jail.
 bantime.overalljails = {{ fail2ban_slow_scan_overalljails | bool | ternary('true', 'false') }}
 
 # -----------------------------------------------------------------------------
@@ -258,10 +316,56 @@ maxretry = {{ fail2ban_apache_auth_maxretry }}
 findtime = {{ fail2ban_apache_auth_findtime }}
 bantime = {{ fail2ban_apache_auth_bantime }}
 
+
+# -----------------------------------------------------------------------------
+# Infrastructure admin exposure: Solr Admin and HAProxy stats on public vhosts.
+# High-confidence but default-off; segmentation remains the real control.
+# -----------------------------------------------------------------------------
+[apache-infra-admin-exposure]
+enabled = {{ fail2ban_infra_admin_exposure_enabled | bool | ternary('true', 'false') }}
+filter = apache-infra-admin-exposure
+port = http,https
+protocol = tcp
+ignoreip = {{ infra_admin_ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_infra_admin_exposure_maxretry }}
+findtime = {{ fail2ban_infra_admin_exposure_findtime }}
+bantime = {{ fail2ban_infra_admin_exposure_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+# -----------------------------------------------------------------------------
+# Optional fake Googlebot detection. Uses Fail2Ban's built-in rDNS ignorecommand.
+# Default-off because this jail performs DNS lookups unlike the other web jails.
+# -----------------------------------------------------------------------------
+[apache-fakegooglebot]
+enabled = {{ fail2ban_apache_fakegooglebot_enabled | bool | ternary('true', 'false') }}
+filter = apache-fakegooglebot
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_apache_fakegooglebot_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_apache_fakegooglebot_maxretry }}
+findtime = {{ fail2ban_apache_fakegooglebot_findtime }}
+bantime = {{ fail2ban_apache_fakegooglebot_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+ignorecommand = %(fail2ban_confpath)s/filter.d/ignorecommands/apache-fakegooglebot <ip> {{ fail2ban_apache_fakegooglebot_ignorecommand_timeout }}
+
 # -----------------------------------------------------------------------------
 # Optional: built-in Apache bot helper filters.
-# Default stays false because log formats/apps may cause false positives
-# or overlap with the custom filters.
+# apache-badbots is enabled by current role default; apache-botsearch stays
+# default-off. Test broad built-in bot filters against real logs before rollout.
 # -----------------------------------------------------------------------------
 [apache-badbots]
 enabled = {{ fail2ban_apache_badbots_enabled | bool | ternary('true', 'false') }}

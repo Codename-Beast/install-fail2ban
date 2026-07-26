@@ -1,0 +1,8 @@
+198.51.100.90 - - [26/Jul/2026:03:10:00 +0200] "GET /webservice/rest/server.php?wstoken=redacted&wsfunction=core_user_get_users HTTP/1.1" 200 2048 "-" "MoodleMobile/4.4"
+198.51.100.90 - - [26/Jul/2026:03:10:01 +0200] "POST /webservice/rest/server.php HTTP/1.1" 200 4096 "-" "MoodleMobile/4.4"
+198.51.100.90 - - [26/Jul/2026:03:10:02 +0200] "GET /moodle/webservice/rest/server.php?wstoken=redacted&wsfunction=core_course_get_contents HTTP/1.1" 200 8192 "-" "MoodleMobile/4.4"
+198.51.100.91 - - [26/Jul/2026:03:10:03 +0200] "POST /webservice/xmlrpc/server.php HTTP/1.1" 200 1024 "-" "IntegrationClient/1.0"
+198.51.100.91 - - [26/Jul/2026:03:10:04 +0200] "POST /moodle/webservice/xmlrpc/server.php HTTP/1.1" 500 512 "-" "IntegrationClient/1.0"
+198.51.100.92 - - [26/Jul/2026:03:10:05 +0200] "POST /webservice/soap/server.php HTTP/1.1" 200 1024 "-" "SOAPClient/1.0"
+198.51.100.92 - - [26/Jul/2026:03:10:06 +0200] "GET /webservice/soap/server.php?wsdl=1 HTTP/1.1" 200 1024 "-" "SOAPClient/1.0"
+198.51.100.93 - - [26/Jul/2026:03:10:07 +0200] "GET https://moodle.example.test/webservice/rest/server.php?wstoken=redacted HTTP/1.1" 200 2048 "-" "MoodleMobile/4.4"
