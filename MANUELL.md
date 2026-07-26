@@ -1,37 +1,54 @@
-# MANUELL.md
+# 🛠️ Manuelle Fail2Ban-Absicherung
 
-Händische Fail2Ban-Absicherung für Debian/Ubuntu-Webserver, falls Ansible nicht verfügbar ist.
+Diese Anleitung beschreibt die händische Variante der Rolle `install-fail2ban` für Debian- und Ubuntu-Webserver. Sie ist für Fälle gedacht, in denen ein Server ohne Ansible vorbereitet, geprüft oder im Notfall nachvollziehbar abgesichert werden soll.
 
-Dieses Tutorial übersetzt die Rolle `install_fail2ban` in manuelle Arbeitsschritte. Es ist für Sysadmins gedacht, die einen Server absichern müssen, auch wenn Ansible gerade nicht zur Verfügung steht.
+Die Ansible-Rolle bleibt der bevorzugte Weg. Manuell arbeitest du nur, wenn du bewusst jede Datei selbst setzen und prüfen willst.
+
+> Kurz gesagt: Erst absichern, dann schreiben, dann testen, dann neu laden.
+> Wenn `fail2ban-client -t` fehlschlägt, bleibt der Dienst unverändert.
+
+## Inhalt
+
+- [Zielbild](#-zielbild)
+- [Vorbereitung](#1-werte-festlegen)
+- [Filter und Jails](#7-filter-installieren)
+- [Test und Aktivierung](#10-konfiguration-testen)
+- [Rollback und Notfallmodus](#16-rollback)
 
 ---
 
-## Zielbild
+## ✅ Zielbild
 
-Nach der Umsetzung gilt:
+Am Ende soll der Server so stehen:
 
-- Fail2Ban ist installiert und aktiviert.
-- SSH wird nur über systemd-journal ausgewertet.
-- Es gibt keinen `/var/log/auth.log`-Fallback.
-- Apache/Moodle-Scanner werden über eigene Filter gebannt.
-- nftables muss vorhanden sein.
-- Die gemeinsame VPN- oder Jump-Host-IP steht in jedem `ignoreip`.
-- Die Konfiguration wird vor dem Start mit `fail2ban-client -t` geprüft.
-- Nach dem Start werden Service-Status, aktive Jails und Ban-Zähler kontrolliert.
+- Fail2Ban ist installiert und aktiv.
+- Bans laufen über nftables.
+- SSH ist über das systemd-Journal geschützt.
+- Die SSH-Ports `22` und `3333` sind abgedeckt.
+- Apache/Moodle-Scans werden über eigene Jails erkannt.
+- Ungewöhnliche oder eindeutig verdächtige User-Agents werden sofort gebannt.
+- Wiederholungstäter landen über `recidive` im Allports-Drop.
+- Admin-, VPN- oder Jump-Host-Adressen stehen in `ignoreip`.
+- Vor Start, Reload oder Restart wird immer `fail2ban-client -t` ausgeführt.
+
+Wichtig: Fail2Ban sperrt IP-Adressen, keine Benutzer. Auch ein Admin mit SSH-Key kann sich aussperren, wenn die eigene Quell-IP nicht in der Whitelist steht.
 
 ---
 
 ## 1. Werte festlegen
 
-Lege vor dem Kopieren der Dateien fest:
+Passe diese Werte vor dem Kopieren an:
 
 ```text
 TRUSTED_IPS="127.0.0.1/8 ::1 203.0.113.55"
 APACHE_ACCESS_LOG="/var/log/apache2/*access.log"
 APACHE_ERROR_LOG="/var/log/apache2/*error.log"
+SSH_PORTS="22,3333"
 ```
 
-`203.0.113.55` ist ein Platzhalter. Ersetze ihn durch die gemeinsame VPN- oder Jump-Host-IP. Ohne diese Whitelist kann ein legitimer SSH-Zugang über eine gemeinsame Quell-IP ausgesperrt werden.
+`203.0.113.55` ist nur ein Platzhalter. Verwende hier echte Admin-, VPN- oder Jump-Host-Adressen.
+
+Wenn du unsicher bist, nimm lieber zuerst nur SSH in Betrieb und prüfe danach die Web-Jails gegen echte Logs.
 
 ---
 
@@ -44,7 +61,7 @@ systemctl status nftables --no-pager
 test -d /var/log/apache2 && echo "Apache log dir exists"
 ```
 
-Wenn `nft` fehlt, hier stoppen. Erst nftables sauber bereitstellen, dann Fail2Ban konfigurieren.
+Wenn `nft` fehlt, installiere und aktiviere nftables zuerst. Diese Anleitung installiert nftables nicht automatisch, weil die Firewall-Policy bewusst gesetzt werden muss.
 
 ---
 
@@ -55,7 +72,7 @@ sudo apt update
 sudo apt install fail2ban
 ```
 
-Noch nicht blind starten. Erst konfigurieren und testen.
+Das Paket kann den Dienst direkt starten. Das ist okay. Wichtig ist nur: neue Dateien erst schreiben, danach `fail2ban-client -t` ausführen und erst dann Reload oder Restart machen.
 
 ---
 
@@ -70,6 +87,8 @@ sudo tar --create --gzip \
 sudo chmod 0600 /root/fail2ban-backup/fail2ban-before-web-protection.tar.gz
 ```
 
+Das Backup ist bewusst einfach gehalten. Es soll im Fehlerfall schnell genug sein, um den alten Stand wiederherzustellen.
+
 ---
 
 ## 5. Verzeichnisse vorbereiten
@@ -82,9 +101,9 @@ sudo install -d -o root -g root -m 0755 /etc/fail2ban/jail.d
 
 ---
 
-## 6. Fail2Ban-Grundkonfiguration
+## 6. Fail2Ban-Grundkonfiguration setzen
 
-Datei anlegen:
+Datei:
 
 ```text
 /etc/fail2ban/fail2ban.d/99-web-protection.local
@@ -93,7 +112,7 @@ Datei anlegen:
 Inhalt:
 
 ```ini
-[DEFAULT]
+[Definition]
 loglevel = INFO
 logtarget = /var/log/fail2ban.log
 dbfile = /var/lib/fail2ban/fail2ban.sqlite3
@@ -101,7 +120,7 @@ dbpurgeage = 2592000
 dbmaxmatches = 20
 ```
 
-Rechte:
+Rechte setzen:
 
 ```bash
 sudo chown root:root /etc/fail2ban/fail2ban.d/99-web-protection.local
@@ -110,44 +129,35 @@ sudo chmod 0644 /etc/fail2ban/fail2ban.d/99-web-protection.local
 
 ---
 
-## 7. Filter anlegen
+## 7. Filter installieren
 
-### 7.1 apache-malicious-paths
+Die statischen Filter liegen in der Rolle unter `roles/install-fail2ban/files/`.
 
-Datei:
+```bash
+sudo install -m 0644 -o root -g root \
+  roles/install-fail2ban/files/apache-malicious-paths.conf \
+  /etc/fail2ban/filter.d/apache-malicious-paths.conf
 
-```text
-/etc/fail2ban/filter.d/apache-malicious-paths.conf
+sudo install -m 0644 -o root -g root \
+  roles/install-fail2ban/files/moodle-badbots.conf \
+  /etc/fail2ban/filter.d/moodle-badbots.conf
+
+sudo install -m 0644 -o root -g root \
+  roles/install-fail2ban/files/apache-scanburst.conf \
+  /etc/fail2ban/filter.d/apache-scanburst.conf
 ```
 
-Inhalt:
+Kurz zur Einordnung:
 
-```ini
-[Definition]
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"(?:GET|POST|HEAD|OPTIONS|PUT|DELETE|PATCH|PROPFIND|CONNECT)\s+(?:https?://[^/\s"]+)?[^\s"?]*(?i:/(?:\.env(?:\.[A-Za-z0-9_-]+)?|\.git|\.svn|\.hg|\.aws|\.ssh))(?=[/?#\s"])[^\s"]*\s+HTTP/\d(?:\.\d)?"\s+\d{3}(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"(?:GET|POST|HEAD|OPTIONS|PUT|DELETE|PATCH|PROPFIND|CONNECT)\s+(?:https?://[^/\s"]+)?[^\s"?]*(?i:/(?:wp-login\.php|xmlrpc\.php|wp-admin|phpmyadmin|pma|adminer(?:\.php)?|vendor/phpunit|eval-stdin\.php|cgi-bin|actuator|boaform|hnap1))(?=[/?#\s"])[^\s"]*\s+HTTP/\d(?:\.\d)?"\s+\d{3}(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"(?:GET|POST|HEAD|OPTIONS|PUT|DELETE|PATCH|PROPFIND|CONNECT)\s+(?:https?://[^/\s"]+)?[^\s"?]*(?i:/(?:config\.php|composer\.(?:json|lock)|phpinfo\.php|info\.php|(?:shell|cmd|webshell|wso|c99|r57|alfa|b374k)\.php))(?=[/?#\s"])[^\s"]*\s+HTTP/\d(?:\.\d)?"\s+\d{3}(?:\s+.*)?$
-            ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"(?:GET|POST|HEAD|OPTIONS|PUT|DELETE|PATCH|PROPFIND|CONNECT)\s+(?:https?://[^/\s"]+)?[^\s"?]*(?i:/(?:etc/passwd|proc/self/environ))(?=[/?#\s"])[^\s"]*\s+HTTP/\d(?:\.\d)?"\s+\d{3}(?:\s+.*)?$
-ignoreregex =
-```
+- `apache-malicious-paths` erkennt eindeutige Scans auf `.env`, `.git`, phpMyAdmin, WordPress, PHPUnit, Webshells und ähnliche Pfade.
+- `moodle-badbots` erkennt wiederholte POST-Zugriffe auf Moodle-Login- und Token-Endpunkte. Einzelne Fehlversuche werden nicht sofort gebannt.
+- `apache-scanburst` zählt viele Fehlerantworten wie `400`, `403`, `404`, `405`, `408` und `414`.
 
-### 7.2 apache-scanburst
+---
 
-Datei:
+## 8. User-Agent-Filter setzen
 
-```text
-/etc/fail2ban/filter.d/apache-scanburst.conf
-```
-
-Inhalt:
-
-```ini
-[Definition]
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+(?:400|403|404|405|408|414)(?:\s+.*)?$
-ignoreregex =
-```
-
-### 7.3 apache-scanner-useragents
+Die Rolle rendert diese Filter normalerweise aus Templates. Wenn du manuell arbeitest, legst du sie direkt an.
 
 Datei:
 
@@ -155,28 +165,40 @@ Datei:
 /etc/fail2ban/filter.d/apache-scanner-useragents.conf
 ```
 
-Inhalt:
-
 ```ini
 [Definition]
-failregex = ^(?:\S+:\d+\s+)?<HOST>\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:sqlmap|nikto|nmap\ scripting\ engine|masscan|zgrab|zmap|gobuster|dirbuster|dirsearch|feroxbuster|ffuf|wpscan|nuclei|acunetix|nessus|openvas|havij|whatweb|censysinspect|internetmeasurement|jaeles|arachni|wapiti|skipfish)[^"]*"(?:\s+.*)?$
+failregex = ^(?:\S+:\d+\s+)?<HOST>.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:sqlmap|nikto|nmap\ scripting\ engine|masscan|zgrab|zmap|gobuster|dirbuster|dirsearch|feroxbuster|ffuf|wpscan|nuclei|acunetix|nessus|openvas|havij|whatweb|censysinspect|internetmeasurement|jaeles|arachni|wapiti|skipfish)[^"]*"(?:\s+.*)?$
 ignoreregex =
 ```
 
-Rechte:
+Datei:
+
+```text
+/etc/fail2ban/filter.d/apache-unusual-useragents.conf
+```
+
+```ini
+[Definition]
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"(?:-|\s*)"(?:\s+.*)?$
+            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]{256,}"(?:\s+.*)?$
+            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:sqlmap|nikto|nmap\ scripting\ engine|masscan|zgrab|zmap|gobuster|dirbuster|dirsearch|feroxbuster|ffuf|wpscan|nuclei|acunetix|nessus|openvas|havij|whatweb|censysinspect|internetmeasurement|jaeles|arachni|wapiti|skipfish)[^"]*"(?:\s+.*)?$
+ignoreregex =
+```
+
+`apache-unusual-useragents` bannt sofort bei fehlendem, leerem, überlangem oder eindeutigem Scanner-User-Agent.
+
+Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` sind bewusst nicht pauschal enthalten. Solche Clients können in Monitoring, APIs oder Cronjobs legitim sein.
+
+Rechte setzen:
 
 ```bash
-sudo chown root:root /etc/fail2ban/filter.d/apache-malicious-paths.conf \
-  /etc/fail2ban/filter.d/apache-scanburst.conf \
-  /etc/fail2ban/filter.d/apache-scanner-useragents.conf
-sudo chmod 0644 /etc/fail2ban/filter.d/apache-malicious-paths.conf \
-  /etc/fail2ban/filter.d/apache-scanburst.conf \
-  /etc/fail2ban/filter.d/apache-scanner-useragents.conf
+sudo chown root:root /etc/fail2ban/filter.d/apache-scanner-useragents.conf /etc/fail2ban/filter.d/apache-unusual-useragents.conf
+sudo chmod 0644 /etc/fail2ban/filter.d/apache-scanner-useragents.conf /etc/fail2ban/filter.d/apache-unusual-useragents.conf
 ```
 
 ---
 
-## 8. Jails anlegen
+## 9. Jails anlegen
 
 Datei:
 
@@ -184,13 +206,13 @@ Datei:
 /etc/fail2ban/jail.d/99-apache-moodle-bots.local
 ```
 
-Inhalt. Ersetze `127.0.0.1/8 ::1 203.0.113.55` durch deine echte Whitelist:
+Ersetze `127.0.0.1/8 ::1 203.0.113.55` durch deine echte Whitelist.
 
 ```ini
 [sshd]
 enabled = true
 filter = sshd
-port = ssh
+port = 22,3333
 protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
 ignoreself = true
@@ -210,10 +232,7 @@ bantime.rndtime = 5m
 enabled = true
 filter = apache-malicious-paths
 port = http,https
-protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables
 action = %(action_)s
@@ -221,17 +240,29 @@ logpath = /var/log/apache2/*access.log
 maxretry = 1
 findtime = 1d
 bantime = -1
-bantime.increment = false
-bantime.rndtime = 0
+
+[moodle-badbots]
+enabled = true
+filter = moodle-badbots
+port = http,https
+ignoreip = 127.0.0.1/8 ::1 203.0.113.55
+backend = auto
+banaction = nftables
+action = %(action_)s
+logpath = /var/log/apache2/*access.log
+maxretry = 25
+findtime = 10m
+bantime = 2h
+bantime.increment = true
+bantime.multipliers = 1 2 6 24
+bantime.maxtime = 7d
+bantime.rndtime = 5m
 
 [apache-scanner-useragents]
 enabled = true
 filter = apache-scanner-useragents
 port = http,https
-protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables
 action = %(action_)s
@@ -239,17 +270,25 @@ logpath = /var/log/apache2/*access.log
 maxretry = 1
 findtime = 1d
 bantime = -1
-bantime.increment = false
-bantime.rndtime = 0
+
+[apache-unusual-useragents]
+enabled = true
+filter = apache-unusual-useragents
+port = http,https
+ignoreip = 127.0.0.1/8 ::1 203.0.113.55
+backend = auto
+banaction = nftables
+action = %(action_)s
+logpath = /var/log/apache2/*access.log
+maxretry = 1
+findtime = 10m
+bantime = 1h
 
 [apache-scanburst]
 enabled = true
 filter = apache-scanburst
 port = http,https
-protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables
 action = %(action_)s
@@ -261,16 +300,12 @@ bantime.increment = true
 bantime.multipliers = 1 2 6 14 60 180
 bantime.maxtime = 90d
 bantime.rndtime = 10m
-bantime.overalljails = false
 
 [apache-overflows]
 enabled = true
 filter = apache-overflows
 port = http,https
-protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables
 action = %(action_)s
@@ -278,17 +313,12 @@ logpath = /var/log/apache2/*error.log
 maxretry = 2
 findtime = 1d
 bantime = -1
-bantime.increment = false
-bantime.rndtime = 0
 
 [apache-shellshock]
 enabled = true
 filter = apache-shellshock
 port = http,https
-protocol = tcp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables
 action = %(action_)s
@@ -296,8 +326,6 @@ logpath = /var/log/apache2/*error.log
 maxretry = 1
 findtime = 1d
 bantime = -1
-bantime.increment = false
-bantime.rndtime = 0
 
 [recidive]
 enabled = true
@@ -305,19 +333,15 @@ filter = recidive
 logpath = /var/log/fail2ban.log
 protocol = tcp,udp
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
-ignoreself = true
-usedns = no
 backend = auto
 banaction = nftables[type=allports]
 action = %(action_)s
 maxretry = 3
 findtime = 7d
 bantime = -1
-bantime.increment = false
-bantime.rndtime = 0
 ```
 
-Rechte:
+Rechte setzen:
 
 ```bash
 sudo chown root:root /etc/fail2ban/jail.d/99-apache-moodle-bots.local
@@ -326,29 +350,42 @@ sudo chmod 0644 /etc/fail2ban/jail.d/99-apache-moodle-bots.local
 
 ---
 
-## 9. Konfiguration testen
+## 10. Konfiguration testen
 
 ```bash
 sudo fail2ban-client -t
 ```
 
-Nur wenn dieser Befehl erfolgreich ist, weitermachen. Bei Fehlern nicht starten, sondern die gemeldete Datei korrigieren und erneut testen.
+Nur wenn diese Prüfung erfolgreich ist, darfst du den Dienst starten, neu laden oder neu starten. Bei Fehlern erst die gemeldete Datei korrigieren und erneut testen.
 
 ---
 
-## 10. Dienst starten oder neu laden
+## 11. Dienst starten oder neu laden
+
+Erstaktivierung:
 
 ```bash
-sudo systemctl enable fail2ban
-sudo systemctl restart fail2ban
+sudo systemctl enable --now fail2ban
 sudo systemctl status fail2ban --no-pager
+```
+
+Spätere Jail- oder Filter-Änderungen:
+
+```bash
+sudo fail2ban-client -t
+sudo fail2ban-client reload
+```
+
+Änderungen unter `/etc/fail2ban/fail2ban.d/` brauchen einen Restart:
+
+```bash
+sudo fail2ban-client -t
+sudo systemctl restart fail2ban
 ```
 
 ---
 
-## 11. Status kontrollieren
-
-Aktive Jails anzeigen:
+## 12. Status prüfen
 
 ```bash
 sudo fail2ban-client status
@@ -359,14 +396,16 @@ Details pro Jail:
 ```bash
 sudo fail2ban-client status sshd
 sudo fail2ban-client status apache-malicious-paths
+sudo fail2ban-client status moodle-badbots
 sudo fail2ban-client status apache-scanner-useragents
+sudo fail2ban-client status apache-unusual-useragents
 sudo fail2ban-client status apache-scanburst
 sudo fail2ban-client status apache-overflows
 sudo fail2ban-client status apache-shellshock
 sudo fail2ban-client status recidive
 ```
 
-Achte pro Jail auf:
+Achte besonders auf:
 
 ```text
 Currently banned
@@ -374,51 +413,78 @@ Total banned
 File list
 ```
 
+Wenn eine erwartete Jail fehlt, nicht weiterarbeiten, sondern zuerst die Konfiguration prüfen.
+
 ---
 
-## 12. nftables prüfen
+## 13. Filter gegen echte Logs testen
+
+```bash
+sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-malicious-paths.conf
+sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/moodle-badbots.conf
+sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-scanner-useragents.conf
+sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-unusual-useragents.conf
+sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/apache-scanburst.conf
+```
+
+Bei False Positives wird der Filter enger gemacht oder ein autorisierter Scanner über `ignoreregex` ausgenommen. Große Netze gehören nicht aus Bequemlichkeit in `ignoreip`.
+
+---
+
+## 14. nftables prüfen
 
 ```bash
 sudo nft list ruleset
 ```
 
-Nach echten Treffern sollten Fail2Ban-Sets oder Regeln sichtbar sein. Einen Test-Ban nur in einem Wartungsfenster setzen.
+Nach echten Treffern sollten Fail2Ban-Tabellen, Chains oder Sets sichtbar sein. Test-Bans nur in einem Wartungsfenster setzen, damit du dich nicht selbst aussperrst.
 
 ---
 
-## 13. Rollback
+## 15. IP entbannen
 
-Wenn etwas schiefgeht:
+```bash
+sudo fail2ban-client set apache-unusual-useragents unbanip 203.0.113.10
+sudo fail2ban-client set recidive unbanip 203.0.113.10
+```
+
+---
+
+## 16. Rollback
 
 ```bash
 sudo systemctl stop fail2ban
 sudo rm -f \
   /etc/fail2ban/fail2ban.d/99-web-protection.local \
   /etc/fail2ban/filter.d/apache-malicious-paths.conf \
+  /etc/fail2ban/filter.d/moodle-badbots.conf \
   /etc/fail2ban/filter.d/apache-scanner-useragents.conf \
+  /etc/fail2ban/filter.d/apache-unusual-useragents.conf \
   /etc/fail2ban/filter.d/apache-scanburst.conf \
   /etc/fail2ban/jail.d/99-apache-moodle-bots.local
+
 sudo tar --extract --gzip \
   --file=/root/fail2ban-backup/fail2ban-before-web-protection.tar.gz \
   --directory=/
+
 sudo fail2ban-client -t
 sudo systemctl restart fail2ban
 ```
 
-Wenn `fail2ban-client -t` nach dem Restore fehlschlägt, Dienst nicht starten und zuerst die gemeldete Datei prüfen.
+Wenn `fail2ban-client -t` nach dem Restore fehlschlägt, Dienst nicht starten. Erst die gemeldete Datei prüfen.
 
 ---
 
-## 14. Minimaler Notfallmodus
+## 17. Minimaler Notfallmodus nur für SSH
 
-Wenn nur SSH sofort geschützt werden muss, lege vorübergehend nur dieses Jail an:
+Wenn nur SSH sofort geschützt werden muss, reicht vorübergehend diese Jail:
 
 ```ini
 [sshd]
 enabled = true
 filter = sshd
 backend = systemd
-port = ssh
+port = 22,3333
 ignoreip = 127.0.0.1/8 ::1 203.0.113.55
 banaction = nftables
 maxretry = 5
@@ -426,10 +492,12 @@ findtime = 10m
 bantime = 1h
 ```
 
-Danach immer:
+Danach:
 
 ```bash
 sudo fail2ban-client -t
 sudo systemctl restart fail2ban
 sudo fail2ban-client status sshd
 ```
+
+Das ist nur der Notfallmodus. Für den vollständigen Webschutz nimm die Jails oben oder, sauberer, direkt die Ansible-Rolle.

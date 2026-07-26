@@ -1,0 +1,9 @@
+---
+profile: production
+skip_list:
+  # The role intentionally uses short module names to match the house style.
+  - fqcn[action-core]
+exclude_paths:
+  - .cache/
+  - .venv*/
+  - tests/.generated/

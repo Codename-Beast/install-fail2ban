@@ -1,9 +1,15 @@
 ---
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
 galaxy_info:
   role_name: install_fail2ban
   namespace: local
-  author: Bernd
-  description: Install and activate Fail2Ban Apache/Moodle protection with nftables.
+  author: BSC Bernd Schreistetter
+  description: Install and activate Fail2Ban protection.
   license: MIT
   min_ansible_version: "2.12"
   platforms:

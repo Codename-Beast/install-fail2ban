@@ -1,0 +1,5 @@
+198.51.100.10 - - [26/Jul/2026:10:10:00 +0200] "GET / HTTP/1.1" 200 123 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"
+198.51.100.11 - - [26/Jul/2026:10:10:01 +0200] "GET /api/ping HTTP/1.1" 200 42 "-" "curl/8.5.0"
+198.51.100.12 - - [26/Jul/2026:10:10:02 +0200] "POST /login/token.php HTTP/1.1" 200 64 "-" "MoodleBot/1.0 internal-monitor"
+198.51.100.13 - - [26/Jul/2026:10:10:03 +0200] "GET / HTTP/1.1" 200 123 "-" "Go-http-client/2.0"
+198.51.100.14 - - [26/Jul/2026:10:10:04 +0200] "GET / HTTP/1.1" 200 123 "-" "python-requests/2.31"

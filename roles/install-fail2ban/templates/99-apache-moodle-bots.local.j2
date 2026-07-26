@@ -1,0 +1,266 @@
+# Managed by Ansible role install-fail2ban.
+#
+# Notes:
+# - No global [DEFAULT] section: this file must not change unrelated SSH/service jails.
+# - ignoreip is built from base values, explicit allowlists, and optional imported nftables sets.
+
+{% set ignoreip = (fail2ban_effective_ignoreip | default((fail2ban_base_ignoreip | default([])) + (fail2ban_ignoreip | default([])))) | map('string') | map('trim') | reject('equalto', '') | unique | list | join(' ') %}
+
+# -----------------------------------------------------------------------------
+# SSH brute-force protection.
+# Keep this conservative: an SSH lockout is operationally worse than a temporary missed ban.
+# -----------------------------------------------------------------------------
+[sshd]
+enabled = {{ fail2ban_sshd_enabled | bool | ternary('true', 'false') }}
+filter = sshd
+port = {{ fail2ban_sshd_port }}
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_sshd_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+maxretry = {{ fail2ban_sshd_maxretry }}
+findtime = {{ fail2ban_sshd_findtime }}
+bantime = {{ fail2ban_sshd_bantime }}
+bantime.increment = {{ fail2ban_sshd_bantime_increment | bool | ternary('true', 'false') }}
+bantime.multipliers = {{ fail2ban_sshd_bantime_multipliers }}
+bantime.maxtime = {{ fail2ban_sshd_bantime_maxtime }}
+bantime.rndtime = {{ fail2ban_sshd_bantime_rndtime }}
+
+# -----------------------------------------------------------------------------
+# High-confidence malicious paths: foreign apps, secrets, web shells, known exploits.
+# One match is enough for a permanent HTTP/HTTPS ban.
+# -----------------------------------------------------------------------------
+[apache-malicious-paths]
+enabled = {{ fail2ban_malicious_paths_enabled | bool | ternary('true', 'false') }}
+filter = apache-malicious-paths
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_malicious_paths_maxretry }}
+findtime = {{ fail2ban_malicious_paths_findtime }}
+bantime = {{ fail2ban_malicious_paths_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+# -----------------------------------------------------------------------------
+# Moodle Badbots: authentication/token endpoint abuse.
+# Threshold-based: one failed login is not a ban, repeated automated POSTs are.
+# -----------------------------------------------------------------------------
+[moodle-badbots]
+enabled = {{ fail2ban_moodle_badbots_enabled | bool | ternary('true', 'false') }}
+filter = moodle-badbots
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_moodle_badbots_maxretry }}
+findtime = {{ fail2ban_moodle_badbots_findtime }}
+bantime = {{ fail2ban_moodle_badbots_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_moodle_badbots_multipliers }}
+bantime.maxtime = {{ fail2ban_moodle_badbots_maxtime }}
+bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
+
+# -----------------------------------------------------------------------------
+# Explicitly named scanners in the User-Agent.
+# The list comes from defaults/main.yml and can be extended per host.
+# -----------------------------------------------------------------------------
+[apache-scanner-useragents]
+enabled = {{ fail2ban_scanner_useragents_enabled | bool | ternary('true', 'false') }}
+filter = apache-scanner-useragents
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_scanner_useragents_maxretry }}
+findtime = {{ fail2ban_scanner_useragents_findtime }}
+bantime = {{ fail2ban_scanner_useragents_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+
+# -----------------------------------------------------------------------------
+# Unusual User-Agents: missing/empty/oversized UA and explicit scanner UAs.
+# Immediate short nftables ban; recidive escalates repeat offenders to all ports.
+# -----------------------------------------------------------------------------
+[apache-unusual-useragents]
+enabled = {{ fail2ban_unusual_useragents_enabled | bool | ternary('true', 'false') }}
+filter = apache-unusual-useragents
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_unusual_useragents_maxretry }}
+findtime = {{ fail2ban_unusual_useragents_findtime }}
+bantime = {{ fail2ban_unusual_useragents_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+# -----------------------------------------------------------------------------
+# Wide path scans across many 400/403/404/405/408/414 responses.
+# This jail is not immediately permanent because NAT/campus IPs may represent many valid users.
+# -----------------------------------------------------------------------------
+[apache-scanburst]
+enabled = {{ fail2ban_scanburst_enabled | bool | ternary('true', 'false') }}
+filter = apache-scanburst
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_scanburst_maxretry }}
+findtime = {{ fail2ban_scanburst_findtime }}
+bantime = {{ fail2ban_scanburst_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_scanburst_multipliers }}
+bantime.maxtime = {{ fail2ban_scanburst_maxtime }}
+bantime.rndtime = {{ fail2ban_scanburst_rndtime }}
+bantime.overalljails = {{ fail2ban_scanburst_overalljails | bool | ternary('true', 'false') }}
+
+# -----------------------------------------------------------------------------
+# Built-in Apache overflow filter.
+# -----------------------------------------------------------------------------
+[apache-overflows]
+enabled = {{ fail2ban_overflows_enabled | bool | ternary('true', 'false') }}
+filter = apache-overflows
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_error_log }}
+maxretry = {{ fail2ban_overflows_maxretry }}
+findtime = {{ fail2ban_overflows_findtime }}
+bantime = {{ fail2ban_overflows_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+# -----------------------------------------------------------------------------
+# Built-in Shellshock filter. Shellshock probes are high-confidence signals.
+# -----------------------------------------------------------------------------
+[apache-shellshock]
+enabled = {{ fail2ban_shellshock_enabled | bool | ternary('true', 'false') }}
+filter = apache-shellshock
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_error_log }}
+maxretry = {{ fail2ban_shellshock_maxretry }}
+findtime = {{ fail2ban_shellshock_findtime }}
+bantime = {{ fail2ban_shellshock_bantime }}
+bantime.increment = false
+bantime.rndtime = 0
+
+# -----------------------------------------------------------------------------
+# Optional: Apache Basic/Digest Auth. This is not the Moodle form login.
+# Enable only when Apache Auth is actually used.
+# -----------------------------------------------------------------------------
+[apache-auth]
+enabled = {{ fail2ban_apache_auth_enabled | bool | ternary('true', 'false') }}
+filter = apache-auth
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_error_log }}
+maxretry = {{ fail2ban_apache_auth_maxretry }}
+findtime = {{ fail2ban_apache_auth_findtime }}
+bantime = {{ fail2ban_apache_auth_bantime }}
+
+# -----------------------------------------------------------------------------
+# Optional: built-in Apache bot helper filters.
+# Default stays false because log formats/apps may cause false positives
+# or overlap with the custom filters.
+# -----------------------------------------------------------------------------
+[apache-badbots]
+enabled = {{ fail2ban_apache_badbots_enabled | bool | ternary('true', 'false') }}
+filter = apache-badbots
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_apache_badbots_maxretry }}
+findtime = {{ fail2ban_apache_badbots_findtime }}
+bantime = {{ fail2ban_apache_badbots_bantime }}
+
+[apache-botsearch]
+enabled = {{ fail2ban_apache_botsearch_enabled | bool | ternary('true', 'false') }}
+filter = apache-botsearch
+port = http,https
+protocol = tcp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_error_log }}
+maxretry = {{ fail2ban_apache_botsearch_maxretry }}
+findtime = {{ fail2ban_apache_botsearch_findtime }}
+bantime = {{ fail2ban_apache_botsearch_bantime }}
+
+# -----------------------------------------------------------------------------
+# Repeat offenders: sources banned multiple times by other jails within the window
+# are blocked permanently on all ports.
+# -----------------------------------------------------------------------------
+[recidive]
+enabled = {{ fail2ban_recidive_enabled | bool | ternary('true', 'false') }}
+filter = recidive
+logpath = /var/log/fail2ban.log
+protocol = tcp,udp
+ignoreip = {{ ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction_allports }}
+action = %(action_)s
+maxretry = {{ fail2ban_recidive_maxretry }}
+findtime = {{ fail2ban_recidive_findtime }}
+bantime = {{ fail2ban_recidive_bantime }}
+bantime.increment = false
+bantime.rndtime = 0

@@ -1,0 +1,60 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Erst validieren, dann Service anfassen. Eine kaputte Config darf nie geladen werden.
+- name: "Verify | test Fail2Ban config"
+  command:
+    cmd: fail2ban-client -t
+  register: fail2ban_config_test
+  changed_when: false
+  failed_when: false
+
+- name: "Verify | stop on invalid config"
+  fail:
+    msg:
+      - "Fail2Ban config test failed. Service was not reloaded or restarted."
+      - "Command: fail2ban-client -t"
+      - "Exit code: {{ fail2ban_config_test.rc }}"
+      - "stdout: {{ fail2ban_config_test.stdout_lines | default([]) }}"
+      - "stderr: {{ fail2ban_config_test.stderr_lines | default([]) }}"
+  when: fail2ban_config_test.rc != 0
+
+# Start erst nach erfolgreichem fail2ban-client -t.
+- name: "Service | enable and start Fail2Ban"
+  service:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: "Service | run notified Fail2Ban handlers"
+  meta: flush_handlers
+
+# Erwartete Jails aus denselben Flags bauen, die auch das Template steuern.
+- name: "Verify | build expected jail list"
+  set_fact:
+    fail2ban_expected_jails: >-
+      {{
+        []
+        + (['sshd'] if (fail2ban_sshd_enabled | bool) else [])
+        + (['apache-malicious-paths'] if (fail2ban_malicious_paths_enabled | bool) else [])
+        + (['moodle-badbots'] if (fail2ban_moodle_badbots_enabled | bool) else [])
+        + (['apache-scanner-useragents'] if (fail2ban_scanner_useragents_enabled | bool) else [])
+        + (['apache-unusual-useragents'] if (fail2ban_unusual_useragents_enabled | bool) else [])
+        + (['apache-scanburst'] if (fail2ban_scanburst_enabled | bool) else [])
+        + (['apache-overflows'] if (fail2ban_overflows_enabled | bool) else [])
+        + (['apache-shellshock'] if (fail2ban_shellshock_enabled | bool) else [])
+        + (['apache-auth'] if (fail2ban_apache_auth_enabled | bool) else [])
+        + (['apache-badbots'] if (fail2ban_apache_badbots_enabled | bool) else [])
+        + (['apache-botsearch'] if (fail2ban_apache_botsearch_enabled | bool) else [])
+        + (['recidive'] if (fail2ban_recidive_enabled | bool) else [])
+      }}
+
+- name: "Verify | check service and jails"
+  include_tasks: report.yml
+  vars:
+    fail2ban_report_title: "Fail2Ban status after successful installation"
+    fail2ban_report_verify: true

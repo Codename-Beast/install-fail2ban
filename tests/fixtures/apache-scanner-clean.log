@@ -1,0 +1,8 @@
+203.0.113.30 - - [26/Jul/2026:01:20:00 +0200] "GET / HTTP/1.1" 200 1234 "-" "Mozilla/5.0 Firefox/128.0"
+203.0.113.31 - - [26/Jul/2026:01:20:00 +0200] "GET /login/index.php HTTP/1.1" 200 1234 "-" "Mozilla/5.0 Chrome/126.0"
+203.0.113.32 - - [26/Jul/2026:01:20:00 +0200] "GET /status.php HTTP/1.1" 200 1234 "-" "curl/8.8.0"
+203.0.113.33 - - [26/Jul/2026:01:20:00 +0200] "GET /health HTTP/1.1" 200 1234 "-" "Wget/1.21.4"
+203.0.113.34 - - [26/Jul/2026:01:20:00 +0200] "GET /api HTTP/1.1" 200 1234 "-" "python-requests/2.32.3"
+203.0.113.35 - - [26/Jul/2026:01:20:00 +0200] "GET /metrics HTTP/1.1" 200 1234 "-" "Prometheus/2.52.0"
+203.0.113.36 - - [26/Jul/2026:01:20:00 +0200] "GET / HTTP/1.1" 200 1234 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)"
+203.0.113.37 - - [26/Jul/2026:01:20:00 +0200] "GET /webservice/rest/server.php HTTP/1.1" 200 1234 "-" "MoodleMobile 4.4"

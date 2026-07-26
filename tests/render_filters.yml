@@ -1,0 +1,83 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+- name: Render Fail2Ban template filters for local regex checks
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/install-fail2ban/defaults/main.yml
+  vars:
+    fail2ban_render_dir: /tmp/install-fail2ban-rendered-filters
+    fail2ban_scanner_useragents_ignore:
+      - CompanySecurityScanner
+  tasks:
+    - name: "Test | create render dir"
+      file:
+        path: "{{ fail2ban_render_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: "Test | render scanner User-Agent filter"
+      template:
+        src: ../roles/install-fail2ban/templates/apache-scanner-useragents.conf.j2
+        dest: "{{ fail2ban_render_dir }}/apache-scanner-useragents.conf"
+        mode: "0644"
+      vars:
+        fail2ban_scanner_useragents_ignore:
+          - CompanySecurityScanner
+
+    - name: "Test | render unusual User-Agent filter"
+      template:
+        src: ../roles/install-fail2ban/templates/apache-unusual-useragents.conf.j2
+        dest: "{{ fail2ban_render_dir }}/apache-unusual-useragents.conf"
+        mode: "0644"
+      vars:
+        fail2ban_scanner_useragents_ignore:
+          - CompanySecurityScanner
+
+    - name: "Test | render scanner filter with empty scanner lists"
+      template:
+        src: ../roles/install-fail2ban/templates/apache-scanner-useragents.conf.j2
+        dest: "{{ fail2ban_render_dir }}/apache-scanner-useragents-empty.conf"
+        mode: "0644"
+      vars:
+        fail2ban_scanner_useragents: []
+        fail2ban_scanner_useragents_extra: []
+        fail2ban_scanner_useragents_ignore: []
+
+    - name: "Test | render unusual filter with empty scanner lists"
+      template:
+        src: ../roles/install-fail2ban/templates/apache-unusual-useragents.conf.j2
+        dest: "{{ fail2ban_render_dir }}/apache-unusual-useragents-empty.conf"
+        mode: "0644"
+      vars:
+        fail2ban_scanner_useragents: []
+        fail2ban_scanner_useragents_extra: []
+        fail2ban_scanner_useragents_ignore: []
+
+    - name: "Test | render jail template"
+      template:
+        src: ../roles/install-fail2ban/templates/99-apache-moodle-bots.local.j2
+        dest: "{{ fail2ban_render_dir }}/99-apache-moodle-bots.local"
+        mode: "0644"
+
+    - name: "Test | render exporter service template"
+      template:
+        src: ../roles/install-fail2ban/templates/fail2ban-exporter.service.j2
+        dest: "{{ fail2ban_render_dir }}/fail2ban-exporter.service"
+        mode: "0644"
+
+    - name: "Test | show rendered templates"
+      debug:
+        msg:
+          - "{{ fail2ban_render_dir }}/apache-scanner-useragents.conf"
+          - "{{ fail2ban_render_dir }}/apache-unusual-useragents.conf"
+          - "{{ fail2ban_render_dir }}/apache-scanner-useragents-empty.conf"
+          - "{{ fail2ban_render_dir }}/apache-unusual-useragents-empty.conf"
+          - "{{ fail2ban_render_dir }}/99-apache-moodle-bots.local"
+          - "{{ fail2ban_render_dir }}/fail2ban-exporter.service"

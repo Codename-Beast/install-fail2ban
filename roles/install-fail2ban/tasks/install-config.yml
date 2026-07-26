@@ -1,0 +1,186 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Paketstatus zuerst lesen: vorbereitete Hosts sollen nicht unnötig in apt laufen.
+- name: "Setup | collect installed packages"
+  package_facts:
+    manager: auto
+
+- name: "Setup | detect missing Fail2Ban packages"
+  set_fact:
+    fail2ban_missing_packages: >-
+      {{
+        fail2ban_packages
+        | reject('in', ansible_facts.packages.keys() | list)
+        | list
+      }}
+
+- name: "Setup | show existing Fail2Ban packages"
+  debug:
+    msg: "All Fail2Ban packages are already installed; skipping apt."
+  when: fail2ban_missing_packages | length == 0
+
+- name: "Setup | install missing Fail2Ban packages"
+  apt:
+    name: "{{ fail2ban_missing_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    policy_rc_d: 101
+  when: fail2ban_missing_packages | length > 0
+
+# Backup nur einmalig vorbereiten. Der Marker verhindert Archiv-Spam bei wiederholten Läufen.
+- name: "Backup | create backup dir"
+  file:
+    path: "{{ fail2ban_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: fail2ban_backup_existing_config | bool
+
+- name: "Backup | check existing config"
+  stat:
+    path: /etc/fail2ban
+  register: fail2ban_etc_stat
+
+- name: "Backup | check initial marker"
+  stat:
+    path: "{{ fail2ban_backup_marker }}"
+  register: fail2ban_backup_marker_stat
+  when: fail2ban_backup_existing_config | bool
+
+- name: "Backup | create initial backup"
+  command:
+    cmd: "tar --create --gzip --file={{ fail2ban_backup_dir }}/fail2ban-{{ ansible_facts.date_time.iso8601_basic_short }}.tar.gz /etc/fail2ban"
+  changed_when: true
+  # noqa: command-instead-of-module
+  when:
+    - fail2ban_backup_existing_config | bool
+    - fail2ban_etc_stat.stat.exists
+    - not (fail2ban_backup_marker_stat.stat.exists | default(false))
+
+- name: "Backup | write initial marker"
+  copy:
+    dest: "{{ fail2ban_backup_marker }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      Initial Fail2Ban backup by role install-fail2ban.
+      Host: {{ inventory_hostname }}
+      Timestamp: {{ ansible_facts.date_time.iso8601 }}
+  when:
+    - fail2ban_backup_existing_config | bool
+    - fail2ban_etc_stat.stat.exists
+    - not (fail2ban_backup_marker_stat.stat.exists | default(false))
+
+- name: "Config | create config dirs"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/fail2ban/fail2ban.d
+    - /etc/fail2ban/filter.d
+    - /etc/fail2ban/jail.d
+
+# Eingeschaltete Built-in-Jails müssen auf dem Zielhost wirklich vorhanden sein.
+- name: "Config | check built-in filters"
+  stat:
+    path: "/etc/fail2ban/filter.d/{{ item.name }}.conf"
+  loop:
+    - { name: "sshd", enabled: "{{ fail2ban_sshd_enabled }}" }
+    - { name: "apache-overflows", enabled: "{{ fail2ban_overflows_enabled }}" }
+    - { name: "apache-shellshock", enabled: "{{ fail2ban_shellshock_enabled }}" }
+    - { name: "recidive", enabled: "{{ fail2ban_recidive_enabled }}" }
+    - { name: "apache-auth", enabled: "{{ fail2ban_apache_auth_enabled }}" }
+    - { name: "apache-badbots", enabled: "{{ fail2ban_apache_badbots_enabled }}" }
+    - { name: "apache-botsearch", enabled: "{{ fail2ban_apache_botsearch_enabled }}" }
+  register: fail2ban_builtin_filter_stats
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "Config | require enabled filters"
+  assert:
+    that:
+      - (not (item.item.enabled | bool)) or item.stat.exists
+    fail_msg: >-
+      Enabled Fail2Ban filter '{{ item.item.name }}' is missing on the target host
+      (/etc/fail2ban/filter.d/{{ item.item.name }}.conf). Disable the jail or check the Fail2Ban package.
+  loop: "{{ fail2ban_builtin_filter_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+# Ab hier werden verwaltete Dateien geschrieben; Handler validieren vor Reload/Restart.
+- name: "Config | install daemon config"
+  copy:
+    src: 99-web-protection.local
+    dest: /etc/fail2ban/fail2ban.d/99-web-protection.local
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_daemon_config
+  notify:
+    - Validate Fail2Ban config
+    - Restart Fail2Ban
+
+- name: "Config | install static filters"
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/fail2ban/filter.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - apache-malicious-paths.conf
+    - moodle-badbots.conf
+    - apache-scanburst.conf
+  register: fail2ban_static_filter_config
+  notify:
+    - Validate Fail2Ban config
+    - Reload Fail2Ban
+
+# Scanner-Filter bleibt Template, damit lokale Scanner/Ignore-Listen sauber escaped werden.
+- name: "Config | render scanner filter"
+  template:
+    src: apache-scanner-useragents.conf.j2
+    dest: /etc/fail2ban/filter.d/apache-scanner-useragents.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_scanner_filter_config
+  notify:
+    - Validate Fail2Ban config
+    - Reload Fail2Ban
+
+- name: "Config | render unusual User-Agent filter"
+  template:
+    src: apache-unusual-useragents.conf.j2
+    dest: /etc/fail2ban/filter.d/apache-unusual-useragents.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_unusual_useragents_filter_config
+  notify:
+    - Validate Fail2Ban config
+    - Reload Fail2Ban
+
+# Eine eigene Jail-Datei, kein globales [DEFAULT], damit fremde Jails unberührt bleiben.
+- name: "Config | render jails"
+  template:
+    src: 99-apache-moodle-bots.local.j2
+    dest: /etc/fail2ban/jail.d/99-apache-moodle-bots.local
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_jail_config
+  notify:
+    - Validate Fail2Ban config
+    - Reload Fail2Ban

@@ -1,0 +1,9 @@
+[fail2ban_vm_test]
+install-fail2ban-test ansible_host=192.168.122.101 ansible_port=22 ansible_user=root ansible_ssh_private_key_file=/home/bernd/.ssh/install_fail2ban_vm_ed25519 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+[fail2ban_vm_blank]
+install-fail2ban-blank ansible_host=192.168.122.102 ansible_port=22 ansible_user=root ansible_ssh_private_key_file=/home/bernd/.ssh/install_fail2ban_vm_ed25519 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+[fail2ban_vm_all:children]
+fail2ban_vm_test
+fail2ban_vm_blank

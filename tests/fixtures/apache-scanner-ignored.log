@@ -1,0 +1,1 @@
+203.0.113.40 - - [26/Jul/2026:01:20:00 +0200] "GET /security-scan HTTP/1.1" 200 1234 "-" "CompanySecurityScanner sqlmap compatibility check"

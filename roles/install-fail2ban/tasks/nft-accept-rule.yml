@@ -1,0 +1,99 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Helper für genau eine nft-Regel: akzeptierte saddr-Sets sammeln, SSH-Sets extra markieren.
+- name: "Preflight | collect accepted source-set references"
+  set_fact:
+    fail2ban_nft_accepted_source_set_keys: >-
+      {{
+        (
+          fail2ban_nft_accepted_source_set_keys
+          + fail2ban_nft_rule_source_set_keys
+        ) | unique | list
+      }}
+    fail2ban_nft_ssh_source_set_keys: >-
+      {{
+        (
+          fail2ban_nft_ssh_source_set_keys
+          + (fail2ban_nft_rule_source_set_keys if fail2ban_nft_rule_accepts_ssh else [])
+        ) | unique | list
+      }}
+  vars:
+    fail2ban_nft_rule_accepts: >-
+      {{
+        fail2ban_nft_rule.expr | default([])
+        | selectattr('accept', 'defined')
+        | list
+        | length > 0
+      }}
+    # Nur direkte saddr @set Referenzen zählen. Keine jumps, maps oder geratenen Namen.
+    fail2ban_nft_rule_source_set_refs: >-
+      {{
+        fail2ban_nft_rule.expr | default([])
+        | selectattr('match', 'defined')
+        | map(attribute='match')
+        | selectattr('left.payload.field', 'defined')
+        | selectattr('left.payload.field', 'equalto', 'saddr')
+        | map(attribute='right')
+        | select('string')
+        | select('match', '^@[^@].+')
+        | list
+      }}
+    fail2ban_nft_rule_source_set_keys: >-
+      {{
+        fail2ban_nft_rule_source_set_refs
+        | map(
+            'regex_replace',
+            '^@',
+            (fail2ban_nft_rule.family ~ '/' ~ fail2ban_nft_rule.table ~ '/')
+          )
+        | list
+      }}
+    fail2ban_nft_rule_dport_values: >-
+      {{
+        fail2ban_nft_rule.expr | default([])
+        | selectattr('match', 'defined')
+        | map(attribute='match')
+        | selectattr('left.payload.field', 'defined')
+        | selectattr('left.payload.field', 'equalto', 'dport')
+        | map(attribute='right')
+        | list
+      }}
+    fail2ban_nft_rule_dport_values_normalized: >-
+      {{
+        (
+          fail2ban_nft_rule_dport_values
+          | reject('mapping')
+          | list
+        )
+        +
+        (
+          fail2ban_nft_rule_dport_values
+          | select('mapping')
+          | selectattr('set', 'defined')
+          | map(attribute='set')
+          | list
+          | flatten
+        )
+      }}
+    # SSH-Admin-Sets sind nur Regeln mit accept und einem passenden dport.
+    fail2ban_nft_rule_accepts_ssh: >-
+      {{
+        fail2ban_nft_rule_accepts
+        and
+        (
+          fail2ban_nft_rule_dport_values_normalized
+          | flatten
+          | map('string')
+          | list
+          | intersect(fail2ban_nft_sshd_ports | map('string') | list)
+          | length > 0
+        )
+      }}
+  when:
+    - fail2ban_nft_rule_accepts | bool
+    - fail2ban_nft_rule_source_set_refs | length > 0

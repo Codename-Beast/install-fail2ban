@@ -1,0 +1,26 @@
+[Definition]
+# Managed by Ansible role install-fail2ban.
+#
+# High-confidence User-Agent abuse:
+# - missing/empty UA: "-" or only whitespace
+# - very long UA values (default >= 256 chars)
+# - explicitly named scanner/security tools from fail2ban_scanner_useragents
+#
+# Generic clients such as curl, wget, python-requests, or Go-http-client are
+# intentionally not matched by default because they may be legitimate monitoring
+# or API clients. Add them explicitly via fail2ban_scanner_useragents_extra only
+# if your own logs prove they are unwanted.
+
+{% set _scanner_agents = ((fail2ban_scanner_useragents | default([])) + (fail2ban_scanner_useragents_extra | default([]))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
+{% set _scanner_ignore_agents = (fail2ban_scanner_useragents_ignore | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
+{% set _max_length = [fail2ban_unusual_useragents_max_length | default(256) | int, 1] | max %}
+failregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"(?:-|\s*)"(?:\s+.*)?$
+            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]{{ '{' }}{{ _max_length }},{{ '}' }}"(?:\s+.*)?$
+{% if _scanner_agents | length > 0 %}
+            ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+{% endif %}
+{% if _scanner_ignore_agents | length > 0 %}
+ignoreregex = ^(?:\S+:\d+\s+)?<HOST>\s+.*"[^"]*"\s+\d{3}(?:\s+\S+)?\s+"[^"]*"\s+"[^"]*(?i:{{ _scanner_ignore_agents | map('regex_escape') | join('|') }})[^"]*"(?:\s+.*)?$
+{% else %}
+ignoreregex =
+{% endif %}

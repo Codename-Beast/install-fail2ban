@@ -1,0 +1,38 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Dev-Hinweis: main.yml bleibt nur der Ablaufplan. Die Logik steckt in den Teildateien.
+# Workflow:
+# 1. Optional read-only report.
+# 2. Preflight and whitelist checks.
+# 3. Install Fail2Ban and write managed configuration.
+# 4. Validate configuration before touching the service.
+# 5. Reload or restart Fail2Ban.
+# 6. Verify service state and active jails.
+
+- name: "Report | show current Fail2Ban state"
+  include_tasks: report.yml
+  vars:
+    fail2ban_report_title: "Fail2Ban status before changes"
+  when: report_only | default(false) | bool
+
+- name: "Report | stop read-only run"
+  meta: end_host
+  when: report_only | default(false) | bool
+
+- name: "Preflight | validate target"
+  include_tasks: preflight.yml
+
+- name: "Setup | install and configure Fail2Ban"
+  include_tasks: install-config.yml
+
+- name: "Service | activate and verify Fail2Ban"
+  include_tasks: activate.yml
+
+- name: "Monitoring | manage Fail2Ban exporter"
+  include_tasks: exporter.yml
+  when: fail2ban_exporter_enabled | bool

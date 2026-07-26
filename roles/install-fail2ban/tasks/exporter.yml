@@ -1,0 +1,82 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Optionaler Exporter: Version und Checksumme sind gepinnt, damit der Download reproduzierbar bleibt.
+- name: "Monitoring | create exporter source dir"
+  file:
+    path: "{{ fail2ban_exporter_src_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "Monitoring | download Fail2Ban exporter"
+  get_url:
+    url: "{{ fail2ban_exporter_archive_url }}"
+    dest: "{{ fail2ban_exporter_src_dir }}/fail2ban_exporter_{{ fail2ban_exporter_version }}_{{ fail2ban_exporter_arch }}.tar.gz"
+    checksum: "{{ fail2ban_exporter_archive_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_exporter_archive
+
+- name: "Monitoring | unpack Fail2Ban exporter"
+  unarchive:
+    src: "{{ fail2ban_exporter_archive.dest }}"
+    dest: "{{ fail2ban_exporter_src_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  register: fail2ban_exporter_unpack
+
+- name: "Monitoring | install Fail2Ban exporter binary"
+  copy:
+    src: "{{ fail2ban_exporter_src_dir }}/fail2ban_exporter"
+    dest: "{{ fail2ban_exporter_bin_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  register: fail2ban_exporter_binary
+  notify: Restart Fail2Ban exporter
+
+- name: "Monitoring | install Fail2Ban exporter service"
+  template:
+    src: fail2ban-exporter.service.j2
+    dest: "/etc/systemd/system/{{ fail2ban_exporter_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: fail2ban_exporter_service
+  notify: Restart Fail2Ban exporter
+
+- name: "Monitoring | enable and start Fail2Ban exporter"
+  systemd:
+    name: "{{ fail2ban_exporter_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: "Monitoring | run notified exporter handlers"
+  meta: flush_handlers
+
+# Nach dem Start muss /metrics erreichbar sein und f2b_up liefern.
+- name: "Monitoring | check Fail2Ban exporter metrics"
+  uri:
+    url: "{{ fail2ban_exporter_health_url }}"
+    return_content: true
+    status_code: 200
+  register: fail2ban_exporter_metrics
+  changed_when: false
+
+- name: "Monitoring | verify Fail2Ban exporter metrics"
+  assert:
+    that:
+      - "'f2b_up' in fail2ban_exporter_metrics.content"
+    fail_msg: "install-fail2ban: Fail2Ban exporter does not expose the f2b_up metric"
+    success_msg: "Fail2Ban exporter exposes metrics."

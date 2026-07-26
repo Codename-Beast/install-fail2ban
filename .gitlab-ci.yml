@@ -1,0 +1,52 @@
+stages:
+  - validate
+  - lint
+
+variables:
+  ANSIBLE_ROLES_PATH: "$CI_PROJECT_DIR/roles"
+  DEBIAN_FRONTEND: noninteractive
+  PIP_ROOT_USER_ACTION: ignore
+
+validate ansible 2.12:
+  stage: validate
+  image: python:3.11-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends fail2ban
+    - pip install --no-cache-dir ansible-core==2.12.10
+  script:
+    - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
+    - fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
+    - fail2ban-regex tests/fixtures/apache-moodle-badbots-attack.log roles/install-fail2ban/files/moodle-badbots.conf
+    - fail2ban-regex tests/fixtures/apache-scanburst-attack.log roles/install-fail2ban/files/apache-scanburst.conf
+    - fail2ban-regex tests/fixtures/apache-scanner-attack.log /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+    - fail2ban-regex tests/fixtures/apache-unusual-useragents-attack.log /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+
+validate ansible 2.21:
+  stage: validate
+  image: python:3.13-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends fail2ban
+    - pip install --no-cache-dir ansible-core==2.21.0
+  script:
+    - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
+    - fail2ban-regex tests/fixtures/apache-malicious-attack.log roles/install-fail2ban/files/apache-malicious-paths.conf
+    - fail2ban-regex tests/fixtures/apache-moodle-badbots-attack.log roles/install-fail2ban/files/moodle-badbots.conf
+    - fail2ban-regex tests/fixtures/apache-scanburst-attack.log roles/install-fail2ban/files/apache-scanburst.conf
+    - fail2ban-regex tests/fixtures/apache-scanner-attack.log /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+    - fail2ban-regex tests/fixtures/apache-unusual-useragents-attack.log /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+
+ansible lint:
+  stage: lint
+  image: python:3.13-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends git fail2ban
+    - pip install --no-cache-dir ansible-core==2.21.0 ansible-lint==26.6.0
+  script:
+    - ansible-lint .

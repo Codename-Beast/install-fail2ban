@@ -1,6 +1,14 @@
 ---
-# Set the shared VPN or jump-host source IP here before enabling the sshd jail.
-install_fail2ban_trusted_ips: []
+# nftables is the source of truth. Set names and comments are not configured here.
+# The role imports address sets referenced as source addresses by direct accept rules.
+fail2ban_nft_whitelist_import_enabled: true
+fail2ban_nft_whitelist_require_match: true
 
-# Optional additional trusted networks, for example monitoring.
-install_fail2ban_allowed_ips: []
+# Fail2Ban protects both SSH listeners.
+fail2ban_sshd_port: "22,3333"
+
+# Ports used to recognize admin source sets that are allowed to reach SSH.
+fail2ban_nft_sshd_ports:
+  - "22"
+  - "3333"
+  - ssh

@@ -1,0 +1,118 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia.de
+# Version: v1.3
+# =========================================
+---
+# Report ist lesend. Im Verify-Modus wird derselbe Output zusätzlich hart geprüft.
+- name: "Report | collect service facts"
+  service_facts:
+
+- name: "Report | read Fail2Ban status"
+  command:
+    cmd: fail2ban-client status
+  register: fail2ban_report_status
+  changed_when: false
+  failed_when: false
+
+# Fail2Ban liefert die Jail-Liste als Text; hier wird daraus eine saubere Liste.
+- name: "Report | parse active jails"
+  set_fact:
+    fail2ban_report_jails: >-
+      {{
+        (
+          fail2ban_report_status.stdout_lines
+          | default([])
+          | select('search', 'Jail list:')
+          | list
+          | first
+          | default('')
+          | regex_replace('^.*Jail list:\s*', '')
+        )
+        | split(',')
+        | map('trim')
+        | reject('equalto', '')
+        | list
+      }}
+
+- name: "Report | read jail details"
+  command:
+    cmd: "fail2ban-client status {{ item }}"
+  loop: "{{ fail2ban_report_jails }}"
+  register: fail2ban_report_jail_status
+  changed_when: false
+  failed_when: false
+  when: fail2ban_report_status.rc == 0
+
+- name: "Report | show summary"
+  debug:
+    msg:
+      - "================================================================"
+      - "{{ fail2ban_report_title | default('Fail2Ban status') }}"
+      - "----------------------------------------------------------------"
+      - "Host: {{ inventory_hostname }}"
+      - "Service state: {{ ansible_facts.services['fail2ban.service'].state | default('not found') }}"
+      - "Service status: {{ ansible_facts.services['fail2ban.service'].status | default('not found') }}"
+      - "fail2ban-client rc: {{ fail2ban_report_status.rc }}"
+      - "Active jails: {{ fail2ban_report_jails | length }}"
+      - "Jail list: {{ (fail2ban_report_jails | length > 0) | ternary(fail2ban_report_jails | join(', '), '-') }}"
+      - "================================================================"
+
+- name: "Report | show unavailable details"
+  debug:
+    msg:
+      - "Fail2Ban status is not available."
+      - "stdout: {{ fail2ban_report_status.stdout_lines | default([]) }}"
+      - "stderr: {{ fail2ban_report_status.stderr_lines | default([]) }}"
+  when: fail2ban_report_status.rc != 0
+
+- name: "Report | show empty jail list"
+  debug:
+    msg: "No active Fail2Ban jails reported."
+  when:
+    - fail2ban_report_status.rc == 0
+    - fail2ban_report_jails | length == 0
+
+- name: "Report | show jail ban counters"
+  debug:
+    msg: >-
+      {{ '%-32s current=%-6s total=%-6s' | format(
+        item.item,
+        fail2ban_report_current_banned,
+        fail2ban_report_total_banned
+      ) }}
+  vars:
+    fail2ban_report_current_banned: >-
+      {{
+        (item.stdout_lines | default([]) | select('search', 'Currently banned:') | list | first | default('Currently banned: n/a'))
+        | regex_replace('^.*Currently banned:\s*', '')
+        | trim
+      }}
+    fail2ban_report_total_banned: >-
+      {{
+        (item.stdout_lines | default([]) | select('search', 'Total banned:') | list | first | default('Total banned: n/a'))
+        | regex_replace('^.*Total banned:\s*', '')
+        | trim
+      }}
+  loop: "{{ fail2ban_report_jail_status.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - fail2ban_report_status.rc == 0
+    - fail2ban_report_jails | length > 0
+
+# Abschluss-Gate: Dienst läuft und alle erwarteten Jails sind wirklich geladen.
+- name: "Verify | require running service and configured jails"
+  assert:
+    that:
+      - ansible_facts.services['fail2ban.service'].state | default('not found') == 'running'
+      - fail2ban_report_status.rc == 0
+      - (fail2ban_expected_jails | default([]) | difference(fail2ban_report_jails)) | length == 0
+    fail_msg:
+      - "Fail2Ban verification failed."
+      - "Service state: {{ ansible_facts.services['fail2ban.service'].state | default('not found') }}"
+      - "fail2ban-client rc: {{ fail2ban_report_status.rc }}"
+      - "Missing jails: {{ fail2ban_expected_jails | default([]) | difference(fail2ban_report_jails) | join(', ') }}"
+    success_msg: "Fail2Ban is running and all configured jails are active."
+  when: fail2ban_report_verify | default(false) | bool
