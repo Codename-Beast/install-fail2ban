@@ -169,23 +169,7 @@ Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filte
 ```
 
 Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst kommt es zu False Positives.
-
----
-
-## ✅ Wiederholbare Qualitätschecks
-
-Zusätzliche Repo-Checks für bekannte Fehlerklassen:
-
-```bash
-python3 tests/scripts/check_fail2ban_unused_defaults.py
-python3 tests/scripts/check_fail2ban_undefined_refs.py
-python3 tests/scripts/check_fail2ban_percent_interpolation.py
 ```
-
-Diese Checks prüfen ungenutzte Defaults, ungesicherte Jinja-Referenzen und ConfigParser-Interpolationsfallen durch literale Prozentzeichen in Fail2Ban-Filterdateien.
-
----
-
 ## 📋 Jail-Überblick
 
 | Jail | Konfidenz/Signal | Default | Standard-Verhalten |
