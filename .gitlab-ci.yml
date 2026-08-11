@@ -4,104 +4,37 @@ stages:
 
 variables:
   ANSIBLE_ROLES_PATH: "$CI_PROJECT_DIR/roles"
+  ANSIBLE_COLLECTIONS_PATH: "$CI_PROJECT_DIR/.cache/collections"
   DEBIAN_FRONTEND: noninteractive
   PIP_ROOT_USER_ACTION: ignore
 
-validate ansible 2.12:
+.validate_ansible:
   stage: validate
-  image: python:3.11-slim
+  image: "python:${PYTHON_VERSION}-slim"
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends fail2ban
-    - pip install --no-cache-dir ansible-core==2.12.10
+    - pip install --no-cache-dir "ansible-core==${ANSIBLE_VERSION}" netaddr==1.3.0
+    - ansible-galaxy collection install -r collections/requirements.yml -p .cache/collections
   script:
     - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
     - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
-    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
-    - python3 tests/scripts/check_fail2ban_unused_defaults.py
-    - python3 tests/scripts/check_fail2ban_undefined_refs.py
-    - python3 tests/scripts/check_fail2ban_percent_interpolation.py
-    - |
-      MALICIOUS=roles/install-fail2ban/files/apache-malicious-paths.conf
-      INFRA=roles/install-fail2ban/files/apache-infra-admin-exposure.conf
-      MOODLE=roles/install-fail2ban/files/moodle-badbots.conf
-      BEHAT=roles/install-fail2ban/files/moodle-behat-access.conf
-      WEBSERVICE=roles/install-fail2ban/files/moodle-webservice-abuse.conf
-      RESET=roles/install-fail2ban/files/moodle-password-reset-abuse.conf
-      SCANBURST=roles/install-fail2ban/files/apache-scanburst.conf
-      SCANNER=/tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
-      UNUSUAL=/tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
-      check_lines() {
-        fail2ban-regex "$1" "$2" | tee /tmp/f2b-regex.txt
-        grep -Fx "$3" /tmp/f2b-regex.txt
-      }
-      check_lines tests/fixtures/apache-malicious-attack.log "$MALICIOUS"         "Lines: 16 lines, 0 ignored, 16 matched, 0 missed"
-      check_lines tests/fixtures/apache-clean.log "$MALICIOUS"         "Lines: 14 lines, 0 ignored, 0 matched, 14 missed"
-      check_lines tests/fixtures/apache-infra-admin-exposure-attack.log "$INFRA"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/apache-infra-admin-exposure-clean.log "$INFRA"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/apache-moodle-badbots-attack.log "$MOODLE"         "Lines: 30 lines, 0 ignored, 30 matched, 0 missed"
-      check_lines tests/fixtures/apache-moodle-badbots-clean.log "$MOODLE"         "Lines: 10 lines, 0 ignored, 0 matched, 10 missed"
-      check_lines tests/fixtures/apache-moodle-behat-attack.log "$BEHAT"         "Lines: 10 lines, 0 ignored, 10 matched, 0 missed"
-      check_lines tests/fixtures/apache-moodle-behat-clean.log "$BEHAT"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/moodle-webservice-abuse-attack.log "$WEBSERVICE"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/moodle-webservice-abuse-clean.log "$WEBSERVICE"         "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
-      check_lines tests/fixtures/moodle-password-reset-abuse-attack.log "$RESET"         "Lines: 6 lines, 0 ignored, 6 matched, 0 missed"
-      check_lines tests/fixtures/moodle-password-reset-abuse-clean.log "$RESET"         "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
-      check_lines tests/fixtures/apache-scanburst-attack.log "$SCANBURST"         "Lines: 90 lines, 0 ignored, 90 matched, 0 missed"
-      check_lines tests/fixtures/apache-scanburst-clean.log "$SCANBURST"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/apache-scanner-attack.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/apache-scanner-clean.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 0 matched, 8 missed"
-      check_lines tests/fixtures/apache-scanner-ignored.log "$SCANNER"         "Lines: 1 lines, 1 ignored, 0 matched, 0 missed"
-      check_lines tests/fixtures/apache-unusual-useragents-attack.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 3 matched, 2 missed"
-      check_lines tests/fixtures/apache-unusual-useragents-clean.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 0 matched, 5 missed"
+    - ansible-playbook -i tests/inventory.ini tests/security_contract.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/regex.yml --syntax-check
+    - ansible-playbook -i tests/inventory.ini tests/security_contract.yml
+    - ansible-playbook -i tests/inventory.ini tests/regex.yml
+
+validate ansible 2.12:
+  extends: .validate_ansible
+  variables:
+    ANSIBLE_VERSION: "2.12.10"
+    PYTHON_VERSION: "3.11"
 
 validate ansible 2.21:
-  stage: validate
-  image: python:3.13-slim
-  before_script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends fail2ban
-    - pip install --no-cache-dir ansible-core==2.21.0
-  script:
-    - ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
-    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
-    - ansible-playbook -i tests/inventory.ini tests/render_filters.yml
-    - python3 tests/scripts/check_fail2ban_unused_defaults.py
-    - python3 tests/scripts/check_fail2ban_undefined_refs.py
-    - python3 tests/scripts/check_fail2ban_percent_interpolation.py
-    - |
-      MALICIOUS=roles/install-fail2ban/files/apache-malicious-paths.conf
-      INFRA=roles/install-fail2ban/files/apache-infra-admin-exposure.conf
-      MOODLE=roles/install-fail2ban/files/moodle-badbots.conf
-      BEHAT=roles/install-fail2ban/files/moodle-behat-access.conf
-      WEBSERVICE=roles/install-fail2ban/files/moodle-webservice-abuse.conf
-      RESET=roles/install-fail2ban/files/moodle-password-reset-abuse.conf
-      SCANBURST=roles/install-fail2ban/files/apache-scanburst.conf
-      SCANNER=/tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
-      UNUSUAL=/tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
-      check_lines() {
-        fail2ban-regex "$1" "$2" | tee /tmp/f2b-regex.txt
-        grep -Fx "$3" /tmp/f2b-regex.txt
-      }
-      check_lines tests/fixtures/apache-malicious-attack.log "$MALICIOUS"         "Lines: 16 lines, 0 ignored, 16 matched, 0 missed"
-      check_lines tests/fixtures/apache-clean.log "$MALICIOUS"         "Lines: 14 lines, 0 ignored, 0 matched, 14 missed"
-      check_lines tests/fixtures/apache-infra-admin-exposure-attack.log "$INFRA"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/apache-infra-admin-exposure-clean.log "$INFRA"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/apache-moodle-badbots-attack.log "$MOODLE"         "Lines: 30 lines, 0 ignored, 30 matched, 0 missed"
-      check_lines tests/fixtures/apache-moodle-badbots-clean.log "$MOODLE"         "Lines: 10 lines, 0 ignored, 0 matched, 10 missed"
-      check_lines tests/fixtures/apache-moodle-behat-attack.log "$BEHAT"         "Lines: 10 lines, 0 ignored, 10 matched, 0 missed"
-      check_lines tests/fixtures/apache-moodle-behat-clean.log "$BEHAT"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/moodle-webservice-abuse-attack.log "$WEBSERVICE"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/moodle-webservice-abuse-clean.log "$WEBSERVICE"         "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
-      check_lines tests/fixtures/moodle-password-reset-abuse-attack.log "$RESET"         "Lines: 6 lines, 0 ignored, 6 matched, 0 missed"
-      check_lines tests/fixtures/moodle-password-reset-abuse-clean.log "$RESET"         "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
-      check_lines tests/fixtures/apache-scanburst-attack.log "$SCANBURST"         "Lines: 90 lines, 0 ignored, 90 matched, 0 missed"
-      check_lines tests/fixtures/apache-scanburst-clean.log "$SCANBURST"         "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
-      check_lines tests/fixtures/apache-scanner-attack.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
-      check_lines tests/fixtures/apache-scanner-clean.log "$SCANNER"         "Lines: 8 lines, 0 ignored, 0 matched, 8 missed"
-      check_lines tests/fixtures/apache-scanner-ignored.log "$SCANNER"         "Lines: 1 lines, 1 ignored, 0 matched, 0 missed"
-      check_lines tests/fixtures/apache-unusual-useragents-attack.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 3 matched, 2 missed"
-      check_lines tests/fixtures/apache-unusual-useragents-clean.log "$UNUSUAL"         "Lines: 5 lines, 0 ignored, 0 matched, 5 missed"
+  extends: .validate_ansible
+  variables:
+    ANSIBLE_VERSION: "2.21.2"
+    PYTHON_VERSION: "3.13"
 
 ansible lint:
   stage: lint
@@ -109,6 +42,7 @@ ansible lint:
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends git fail2ban
-    - pip install --no-cache-dir ansible-core==2.21.0 ansible-lint==26.6.0
+    - pip install --no-cache-dir ansible-core==2.21.2 ansible-lint==26.6.0 netaddr==1.3.0
+    - ansible-galaxy collection install -r collections/requirements.yml -p .cache/collections
   script:
     - ansible-lint .

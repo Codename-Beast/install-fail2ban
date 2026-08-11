@@ -1,0 +1,99 @@
+---
+name: Validate Ansible role
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: ansible-core ${{ matrix.ansible }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ansible: "2.12.10"
+            python: "3.11"
+          - ansible: "2.21.2"
+            python: "3.13"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
+
+      - name: Install Ansible dependencies
+        run: |
+          python -m pip install --disable-pip-version-check "ansible-core==${{ matrix.ansible }}" netaddr==1.3.0
+          ansible-galaxy collection install -r collections/requirements.yml -p .cache/collections
+
+      - name: Run syntax checks
+        env:
+          ANSIBLE_ROLES_PATH: ${{ github.workspace }}/roles
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/.cache/collections
+        run: |
+          ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
+          ansible-playbook -i tests/inventory.ini tests/render_filters.yml --syntax-check
+          ansible-playbook -i tests/inventory.ini tests/security_contract.yml --syntax-check
+          ansible-playbook -i tests/inventory.ini tests/regex.yml --syntax-check
+
+      - name: Validate security contracts
+        env:
+          ANSIBLE_ROLES_PATH: ${{ github.workspace }}/roles
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/.cache/collections
+        run: ansible-playbook -i tests/inventory.ini tests/security_contract.yml
+
+      - name: Validate exact Fail2Ban regex counts
+        env:
+          ANSIBLE_ROLES_PATH: ${{ github.workspace }}/roles
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/.cache/collections
+        run: ansible-playbook -i tests/inventory.ini tests/regex.yml
+
+  lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+
+      - name: Install lint dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends fail2ban
+          python -m pip install --disable-pip-version-check -r requirements-test.txt
+          ansible-galaxy collection install -r collections/requirements.yml -p .cache/collections
+
+      - name: Run production lint profile
+        env:
+          ANSIBLE_ROLES_PATH: ${{ github.workspace }}/roles
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/.cache/collections
+        run: ansible-lint .

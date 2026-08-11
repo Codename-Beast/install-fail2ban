@@ -5,3 +5,7 @@ __pycache__/
 .cache/
 *.tar.gz
 tests/.generated/
+
+# Local lab inventories stay on the operator workstation.
+inventory/vm-hosts
+inventory/group_vars/fail2ban_vm_all.yml

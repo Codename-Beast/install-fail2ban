@@ -1,8 +1,7 @@
 # =========================================
 # Install Fail2Ban Role
 # Developer: BSC Bernd Schreistetter
-# Company: eLeDia.de
-# Version: v1.3
+# Company: eLeDia GmbH
 # =========================================
 ---
 # Dev-Hinweis: main.yml bleibt nur der Ablaufplan. Die Logik steckt in den Teildateien.

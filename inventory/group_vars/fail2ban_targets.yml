@@ -1,14 +1,16 @@
 ---
-# nftables is the source of truth. Set names and comments are not configured here.
-# The role imports address sets referenced as source addresses by direct accept rules.
+# nftables is the source of truth. Only sets with explicit trust comments are
+# imported; unrelated accept-rule sets never become global Fail2Ban exemptions.
 fail2ban_nft_whitelist_import_enabled: true
 fail2ban_nft_whitelist_require_match: true
+# Temporary migration mode until the real admin/monitoring exemptions are known.
+# Re-enable immediately after fail2ban-admin/fail2ban-ignore have been defined.
+fail2ban_whitelist_safety_checks_enabled: false
+fail2ban_nft_whitelist_discovery_mode: comment
+fail2ban_nft_whitelist_comment_markers:
+  - fail2ban-ignore
+fail2ban_nft_admin_comment_markers:
+  - fail2ban-admin
 
 # Fail2Ban protects both SSH listeners.
 fail2ban_sshd_port: "22,3333"
-
-# Ports used to recognize admin source sets that are allowed to reach SSH.
-fail2ban_nft_sshd_ports:
-  - "22"
-  - "3333"
-  - ssh

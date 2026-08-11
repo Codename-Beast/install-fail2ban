@@ -1,0 +1,111 @@
+---
+- name: Render filters before regex validation
+  import_playbook: render_filters.yml
+
+- name: Validate Fail2Ban filters against exact fixture counts
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    regex_cases:
+      - name: malicious-attack
+        log: apache-malicious-attack.log
+        filter: roles/install-fail2ban/files/apache-malicious-paths.conf
+        expected: "Lines: 16 lines, 0 ignored, 16 matched, 0 missed"
+      - name: malicious-clean
+        log: apache-clean.log
+        filter: roles/install-fail2ban/files/apache-malicious-paths.conf
+        expected: "Lines: 14 lines, 0 ignored, 0 matched, 14 missed"
+      - name: infra-attack
+        log: apache-infra-admin-exposure-attack.log
+        filter: roles/install-fail2ban/files/apache-infra-admin-exposure.conf
+        expected: "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
+      - name: infra-clean
+        log: apache-infra-admin-exposure-clean.log
+        filter: roles/install-fail2ban/files/apache-infra-admin-exposure.conf
+        expected: "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
+      - name: moodle-badbots-attack
+        log: apache-moodle-badbots-attack.log
+        filter: roles/install-fail2ban/files/moodle-badbots.conf
+        expected: "Lines: 30 lines, 0 ignored, 30 matched, 0 missed"
+      - name: moodle-badbots-clean
+        log: apache-moodle-badbots-clean.log
+        filter: roles/install-fail2ban/files/moodle-badbots.conf
+        expected: "Lines: 10 lines, 0 ignored, 0 matched, 10 missed"
+      - name: behat-attack
+        log: apache-moodle-behat-attack.log
+        filter: roles/install-fail2ban/files/moodle-behat-access.conf
+        expected: "Lines: 10 lines, 0 ignored, 10 matched, 0 missed"
+      - name: behat-clean
+        log: apache-moodle-behat-clean.log
+        filter: roles/install-fail2ban/files/moodle-behat-access.conf
+        expected: "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
+      - name: webservice-attack
+        log: moodle-webservice-abuse-attack.log
+        filter: roles/install-fail2ban/files/moodle-webservice-abuse.conf
+        expected: "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
+      - name: webservice-clean
+        log: moodle-webservice-abuse-clean.log
+        filter: roles/install-fail2ban/files/moodle-webservice-abuse.conf
+        expected: "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
+      - name: reset-attack
+        log: moodle-password-reset-abuse-attack.log
+        filter: roles/install-fail2ban/files/moodle-password-reset-abuse.conf
+        expected: "Lines: 6 lines, 0 ignored, 6 matched, 0 missed"
+      - name: reset-clean
+        log: moodle-password-reset-abuse-clean.log
+        filter: roles/install-fail2ban/files/moodle-password-reset-abuse.conf
+        expected: "Lines: 5 lines, 0 ignored, 1 matched, 4 missed"
+      - name: scanburst-attack
+        log: apache-scanburst-attack.log
+        filter: roles/install-fail2ban/files/apache-scanburst.conf
+        expected: "Lines: 90 lines, 0 ignored, 90 matched, 0 missed"
+      - name: scanburst-clean
+        log: apache-scanburst-clean.log
+        filter: roles/install-fail2ban/files/apache-scanburst.conf
+        expected: "Lines: 6 lines, 0 ignored, 0 matched, 6 missed"
+      - name: scanner-attack
+        log: apache-scanner-attack.log
+        filter: /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+        expected: "Lines: 8 lines, 0 ignored, 8 matched, 0 missed"
+      - name: scanner-clean
+        log: apache-scanner-clean.log
+        filter: /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+        expected: "Lines: 8 lines, 0 ignored, 0 matched, 8 missed"
+      - name: scanner-ignored
+        log: apache-scanner-ignored.log
+        filter: /tmp/install-fail2ban-rendered-filters/apache-scanner-useragents.conf
+        expected: "Lines: 1 lines, 1 ignored, 0 matched, 0 missed"
+      - name: unusual-attack
+        log: apache-unusual-useragents-attack.log
+        filter: /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+        expected: "Lines: 5 lines, 0 ignored, 3 matched, 2 missed"
+      - name: unusual-clean
+        log: apache-unusual-useragents-clean.log
+        filter: /tmp/install-fail2ban-rendered-filters/apache-unusual-useragents.conf
+        expected: "Lines: 5 lines, 0 ignored, 0 matched, 5 missed"
+  tasks:
+    - name: "Test | run fail2ban-regex fixtures"
+      command:
+        argv:
+          - fail2ban-regex
+          - "tests/fixtures/{{ item.log }}"
+          - "{{ item.filter }}"
+        chdir: "{{ playbook_dir | dirname }}"
+      loop: "{{ regex_cases }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: regex_results
+      changed_when: false
+
+    - name: "Test | require exact fail2ban-regex counts"
+      assert:
+        that:
+          - item.item.expected in item.stdout_lines
+        quiet: true
+        fail_msg: >-
+          {{ item.item.name }} returned unexpected counts. Expected:
+          {{ item.item.expected }}
+      loop: "{{ regex_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"

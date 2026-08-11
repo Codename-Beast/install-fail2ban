@@ -1,5 +1,5 @@
 ---
-fail2ban_role_version: "1.4.0"
+fail2ban_role_version: "2.0.0"
 
 # Fail2Ban role defaults
 #
@@ -42,16 +42,31 @@ fail2ban_allowed_ips: []
 #   - 203.0.113.55
 #   - 198.51.100.0/24
 
-# Discover trusted address sets from their use in nftables accept rules.
-# Set names and comments are intentionally irrelevant.
+# Import only nftables address sets whose exact comment declares the trust class.
+# This prevents unrelated accept rules, dead chains, CDN sets, or service-specific
+# source lists from silently becoming global Fail2Ban exemptions.
 fail2ban_nft_whitelist_import_enabled: true
 fail2ban_nft_whitelist_require_match: true
-# nft JSON normally renders the SSH service as numeric port 22.
-# Override this list when Fail2Ban protects a non-standard SSH port.
-fail2ban_nft_sshd_ports:
-  - "22"
-  - "3333"
-  - ssh
+# Temporary migration switch: false skips whitelist format/match/IP checks and the
+# SSH admin guard. It does not add any exemption and should be re-enabled once the
+# trusted admin/monitoring sources are known.
+fail2ban_whitelist_safety_checks_enabled: true
+fail2ban_nft_whitelist_discovery_mode: comment
+fail2ban_nft_whitelist_comment_markers:
+  - fail2ban-ignore
+fail2ban_nft_admin_comment_markers:
+  - fail2ban-admin
+
+# Optional explicit mode for infrastructures that cannot add nftables comments.
+# Values are exact family/table/set identities; no firewall rules are inferred.
+fail2ban_nft_whitelist_explicit_set_keys: []
+fail2ban_nft_admin_explicit_set_keys: []
+# Example:
+# fail2ban_nft_whitelist_discovery_mode: explicit
+# fail2ban_nft_whitelist_explicit_set_keys:
+#   - inet/filter/trusted_monitoring
+# fail2ban_nft_admin_explicit_set_keys:
+#   - inet/filter/trusted_admins
 
 # -- Log paths -----------------------------------------------------
 # Active logs only. Do not use *access.log because rotated files may be included.

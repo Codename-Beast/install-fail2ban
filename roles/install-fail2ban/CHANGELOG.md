@@ -4,6 +4,43 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ---
 
+## [2.0.0] - 2026-08-11
+
+### Migration
+
+- Der nftables-Whitelist-Import verwendet standardmäßig explizite Set-Kommentare statt beliebiger direkter `accept`-Regeln. Vertrauenswürdige Sets können mit `fail2ban-ignore` beziehungsweise `fail2ban-admin` markiert oder im Modus `explicit` über genaue `family/table/set`-Identitäten angegeben werden; Firewallregeln werden nicht mehr als Vertrauen interpretiert.
+- Solange die echten Ausnahmen noch nicht feststehen, deaktiviert `fail2ban_whitelist_safety_checks_enabled: false` die neuen Marker-, Set-, IP/CIDR- und SSH-Admin-Preflight-Prüfungen. Der Schalter erzeugt keine Ausnahme und muss nach der Migration wieder aktiviert werden.
+- `ansible.utils.ipaddr` sowie `netaddr` werden nur für die aktivierten semantischen Whitelist-Prüfungen benötigt.
+
+### Added
+
+- Sichere, comment-basierte Trennung zwischen allgemeinen Monitoring-Ausnahmen und SSH-Admin-Quellen.
+- Reine Ansible-Vertragstests für nftables-Set-Auswahl sowie gültige und ungültige IPv4-/IPv6-Werte.
+- Reine Ansible-Regex-Matrix mit 19 exakten Attack-, Clean- und Ignore-Prüfungen.
+- GitHub-Actions-Workflow für ansible-core 2.12.10, ansible-core 2.21.2 und das Production-Profil von `ansible-lint`.
+- MIT-Lizenzdatei und neutrale Beispielinventare.
+
+### Fixed
+
+- Bei aktivierten Whitelist-Sicherheitschecks werden ungültige IPv4-Oktette, IPv4-Präfixe über `/32`, IPv6-Präfixe über `/128` und fehlerhafte IPv6-Syntax bereits im Preflight abgelehnt.
+- README-Aufruf mit fehlendem `-e`, fehlerhafte Tabelle, falscher Filterpfad und beschädigter Markdown-Codeblock korrigiert.
+- Lokale VM-Adressen und SSH-Pfade werden nicht mehr im Repository versioniert.
+- Inkonsistente Versionsangaben und veraltete Dokumentation bereinigt.
+
+### Changed
+
+- CI-Testlogik aus Python-Helfern in ausführbare Ansible-Playbooks überführt; das Repository enthält keine Python- oder Shell-Testskripte.
+- GitLab-CI dedupliziert und an dieselben zentralen Ansible-Testplaybooks wie GitHub Actions angebunden.
+- README um Schnellstart, Abhängigkeiten, Whitelist-Migration, lokale Prüfungen, Inventarbeispiele und Lizenzangaben ergänzt.
+
+### Testing
+
+- Syntaxchecks mit ansible-core 2.12.10 und 2.21.2.
+- `ansible-lint` mit Production-Profil.
+- Exakte Fail2Ban-Regex-Matrix und Security-Contract-Tests in beiden unterstützten Ansible-Versionen.
+
+---
+
 ## [1.4.0]
 
 ### Added

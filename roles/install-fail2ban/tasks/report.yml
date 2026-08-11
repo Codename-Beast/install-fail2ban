@@ -1,8 +1,7 @@
 # =========================================
 # Install Fail2Ban Role
 # Developer: BSC Bernd Schreistetter
-# Company: eLeDia.de
-# Version: v1.3
+# Company: eLeDia GmbH
 # =========================================
 ---
 # Report ist lesend. Im Verify-Modus wird derselbe Output zusätzlich hart geprüft.

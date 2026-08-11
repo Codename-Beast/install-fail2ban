@@ -8,24 +8,31 @@ Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban,
 
 Vorab Infos Einholen ohne Installation :
 ```bash
-ansible-playbook install_fail2ban.yml  -e hosts="hustensaft" -e report_only=true -i inventory/hc-moodle
+ansible-playbook install_fail2ban.yml -e 'hosts=hustensaft' -e 'report_only=true' -i inventory/hc-moodle
 ```
 Installation auf den Server brügeln :
 
 ```bash
-ansible-playbook install_fail2ban.yml hosts="hc-hustensaft" -i  inventory/hc-moodle
+ansible-playbook install_fail2ban.yml -e 'hosts=hc-hustensaft' -i inventory/hc-moodle
+```
+
+Abhängigkeiten für die vollständigen Whitelist-Sicherheitschecks auf dem Controller :
+
+```bash
+ansible-galaxy collection install -r collections/requirements.yml
+python3 -m pip install 'netaddr==1.3.0'
 ```
 
 ---
 
 ## ⚙️ Zusammenfassung
 
-|Service-Name| Stand |
+| Service-Name | Stand |
 |---|---|
-| Zielsystem | Debian |
-| Firewall | nftables, sollte Installiert sein |
+| Zielsystem | Debian / Ubuntu |
+| Firewall | nftables, sollte installiert sein |
 | SSH | systemd-journal, Ports `22` und `3333` |
-| Apache-Logs unter `/var/log/apache2` |
+| Apache-Logs | unter `/var/log/apache2` |
 
 Die Rolle schreibt keine globale `[DEFAULT]`-Jail-Konfiguration. Alle verwalteten Jails bekommen ihre eigene `ignoreip`, damit bestehende fremde Jails nicht ungewollt verändert werden.
 
@@ -84,9 +91,44 @@ fail2ban_base_ignoreip:
   - "::1"
 ```
 
-Die Rolle liest `nft -j list ruleset` und übernimmt nur Adress-Sets, die in direkten `accept`-Regeln als Quelladresse verwendet werden. Sets aus `drop`-/`reject`-Regeln und nicht referenzierte Sets werden nicht übernommen.
+Die Rolle liest `nft -j list ruleset`. Standardmäßig übernimmt sie nur Adress-Sets, die mit einem exakten Kommentar als vertrauenswürdig markiert sind:
 
-Für SSH gibt es eine zusätzliche Lockout-Sicherung. Wenn `sshd` aktiv ist, muss eine Admin-, VPN- oder Jump-Host-Adresse über nftables oder `fail2ban_trusted_ips` ermittelt werden. Reine Monitoring-Adressen reichen dafür nicht.
+- `fail2ban-ignore` für allgemeine Ausnahmen
+- `fail2ban-admin` für Admin-, VPN- oder Jump-Host-Adressen
+
+Ein Admin-Set wird automatisch auch allgemein freigestellt. Unmarkierte Sets und beliebige `accept`-Regeln werden nicht als Whitelist geraten.
+
+```nft
+set trusted_monitoring_v4 {
+    type ipv4_addr
+    comment "fail2ban-ignore"
+}
+
+set trusted_admin_v4 {
+    type ipv4_addr
+    comment "fail2ban-admin"
+}
+```
+
+Wenn Kommentare in der Firewall nicht möglich sind, können Sets über ihre genaue `family/table/set`-Identität angegeben werden:
+
+```yaml
+fail2ban_nft_whitelist_discovery_mode: explicit
+fail2ban_nft_whitelist_explicit_set_keys:
+  - inet/filter/trusted_monitoring_v4
+fail2ban_nft_admin_explicit_set_keys:
+  - inet/filter/trusted_admin_v4
+```
+
+Solange noch nicht feststeht, welche Admin-, VPN-, Monitoring- oder Jump-Host-Adressen ausgenommen werden sollen, können die neuen Preflight-Checks vorübergehend deaktiviert werden:
+
+```yaml
+fail2ban_whitelist_safety_checks_enabled: false
+```
+
+Das überspringt die Marker-, Set-, IP/CIDR- und SSH-Admin-Prüfungen. Es legt aber **keine** Ausnahme an. `sshd` bleibt aktiv und kann deshalb auch eine Admin-IP bannen. Sobald die echten Ausnahmen feststehen, den Schalter wieder auf `true` setzen.
+
+Für SSH gibt es eine zusätzliche Lockout-Sicherung. Wenn `sshd` aktiv ist, muss eine Admin-, VPN- oder Jump-Host-Adresse über `fail2ban-admin`, `fail2ban_nft_admin_explicit_set_keys` oder `fail2ban_trusted_ips` ermittelt werden. Reine Monitoring-Adressen reichen dafür nicht.
 
 Zusätzliche Adressen:
 
@@ -159,7 +201,7 @@ fail2ban_scanner_useragents_ignore:
 Neue verdächtige Pfade ergänzt du im Filter:
 
 ```text
-install-fail2ban/files/apache-malicious-paths.conf
+roles/install-fail2ban/files/apache-malicious-paths.conf
 ```
 
 Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filter nach `/.env` an jeder Stelle im Request-Pfad sucht. Für einen neuen Pfad ergänzt du die passende Gruppe, zum Beispiel:
@@ -169,7 +211,31 @@ Beispiel: `/.env` und `/public_html/.env` sind bereits abgedeckt, weil der Filte
 ```
 
 Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. Sonst kommt es zu False Positives.
+
+---
+
+## ✅ Wiederholbare Qualitätschecks
+
+Zusätzliche Repo-Checks für bekannte Fehlerklassen:
+
+```bash
+ANSIBLE_COLLECTIONS_PATH=.cache/collections ANSIBLE_ROLES_PATH=roles \
+  ansible-playbook -i tests/inventory.ini install_fail2ban.yml --syntax-check
+
+ANSIBLE_COLLECTIONS_PATH=.cache/collections ANSIBLE_ROLES_PATH=roles \
+  ansible-playbook -i tests/inventory.ini tests/security_contract.yml
+
+ANSIBLE_COLLECTIONS_PATH=.cache/collections ANSIBLE_ROLES_PATH=roles \
+  ansible-playbook -i tests/inventory.ini tests/regex.yml
+
+ANSIBLE_COLLECTIONS_PATH=.cache/collections ANSIBLE_ROLES_PATH=roles \
+  ansible-lint .
 ```
+
+Die Checks prüfen Syntax, Whitelist-Vertrag, IPv4/IPv6-Werte und die exakten Trefferzahlen aller Regex-Fixtures. GitHub Actions führt sie automatisch aus. `.gitlab-ci.yml` enthält die gleiche Matrix für einen vorhandenen GitLab-Runner.
+
+---
+
 ## 📋 Jail-Überblick
 
 | Jail | Konfidenz/Signal | Default | Standard-Verhalten |
@@ -302,10 +368,17 @@ sudo systemctl restart fail2ban
 
 - `MANUELL.md`: bewusst schlanker Basis-/Notfall-Auszug; vollständige Jail-Übersicht bleibt hier im README
 - `CHANGELOG.md`: Änderungen und Versionen
+- `inventory/vm-hosts.example`: Beispiel für lokale VM-Tests
+- `inventory/group_vars/fail2ban_vm_all.yml.example`: Beispielvariablen ohne lokale Zugangsdaten
+
+Die echten VM-Inventare bleiben lokal und werden über `.gitignore` ausgeschlossen.
 
 ## 🧾 Unterstützte Ansible-Versionen
 
+- Rollen-Version `2.0.0`
 - ansible-core 2.12.10
 - ansible-core 2.21.2
+- MIT-Lizenz, siehe `LICENSE`
+
 ##
 Made with ☕ and ❤️ by **Bernd Schreistetter**

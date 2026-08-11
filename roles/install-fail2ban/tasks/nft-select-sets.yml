@@ -1,0 +1,60 @@
+# =========================================
+# Install Fail2Ban Role
+# Developer: BSC Bernd Schreistetter
+# Company: eLeDia GmbH
+# =========================================
+---
+- name: "Preflight | initialize discovered nft whitelist sets"
+  set_fact:
+    fail2ban_nft_whitelist_sets: []
+    fail2ban_nft_admin_whitelist_sets: []
+
+# Im sicheren Standardmodus ist Vertrauen explizit am Set markiert. Admin-Sets
+# gelten zusätzlich als allgemeine Fail2Ban-Ausnahme, nicht nur für den SSH-Guard.
+- name: "Preflight | collect comment-marked trusted nft sets"
+  set_fact:
+    fail2ban_nft_whitelist_sets: "{{ fail2ban_nft_whitelist_sets + [item] }}"
+  loop: "{{ fail2ban_nft_all_sets | default([]) }}"
+  loop_control:
+    label: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  when:
+    - fail2ban_nft_whitelist_discovery_mode == 'comment'
+    - item.comment | default('') in ((fail2ban_nft_whitelist_comment_markers | default([])) + (fail2ban_nft_admin_comment_markers | default([])))
+
+- name: "Preflight | collect comment-marked admin nft sets"
+  set_fact:
+    fail2ban_nft_admin_whitelist_sets: "{{ fail2ban_nft_admin_whitelist_sets + [item] }}"
+  loop: "{{ fail2ban_nft_all_sets | default([]) }}"
+  loop_control:
+    label: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  when:
+    - fail2ban_nft_whitelist_discovery_mode == 'comment'
+    - item.comment | default('') in (fail2ban_nft_admin_comment_markers | default([]))
+
+- name: "Preflight | collect explicitly trusted nft sets"
+  set_fact:
+    fail2ban_nft_whitelist_sets: "{{ fail2ban_nft_whitelist_sets + [item] }}"
+  vars:
+    fail2ban_nft_set_key: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  loop: "{{ fail2ban_nft_all_sets | default([]) }}"
+  loop_control:
+    label: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  when:
+    - fail2ban_nft_whitelist_discovery_mode == 'explicit'
+    - >-
+      fail2ban_nft_set_key in (
+        (fail2ban_nft_whitelist_explicit_set_keys | default([]))
+        + (fail2ban_nft_admin_explicit_set_keys | default([]))
+      )
+
+- name: "Preflight | collect explicitly trusted admin nft sets"
+  set_fact:
+    fail2ban_nft_admin_whitelist_sets: "{{ fail2ban_nft_admin_whitelist_sets + [item] }}"
+  vars:
+    fail2ban_nft_set_key: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  loop: "{{ fail2ban_nft_all_sets | default([]) }}"
+  loop_control:
+    label: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
+  when:
+    - fail2ban_nft_whitelist_discovery_mode == 'explicit'
+    - fail2ban_nft_set_key in (fail2ban_nft_admin_explicit_set_keys | default([]))

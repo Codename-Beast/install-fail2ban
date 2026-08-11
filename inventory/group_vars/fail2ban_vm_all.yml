@@ -1,9 +1,0 @@
----
-# Local libvirt VM test targets. Both VMs listen on SSH ports 22 and 3333.
-fail2ban_nft_whitelist_import_enabled: true
-fail2ban_nft_whitelist_require_match: true
-fail2ban_nft_sshd_ports:
-  - "22"
-  - "3333"
-  - ssh
-fail2ban_sshd_port: "22,3333"

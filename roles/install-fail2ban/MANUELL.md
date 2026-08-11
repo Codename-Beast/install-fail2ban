@@ -9,13 +9,12 @@ Diese Anleitung beschreibt die händische Variante der Rolle `install-fail2ban` 
 > komplette Jail-Übersicht inklusive Moodle-Webservice/Password-Reset, Behat,
 > Low-and-Slow, Infra-Admin-Exposure und Fake-Googlebot siehe `README.md`,
 > Abschnitt "Jail-Überblick". Neue optionale oder spezialisierte Jails werden
-> nicht automatisch hier nachgezogen, damit es keine zweite vollständige Wahrheit
-> neben der Rolle/README gibt.
-
+> bewusst nicht hier nachgezogen, damit neben Rolle und README keine zweite
+> vollständige Quelle entsteht.
 
 ---
 
-## Ziel Zustand
+## Zielzustand
 
 Am Ende soll der Server so stehen:
 
@@ -43,7 +42,7 @@ APACHE_ERROR_LOG="/var/log/apache2/*error.log"
 SSH_PORTS="22,3333"
 ```
 
-`203.0.113.55` ist nur ein Platzhalter. Verwende die eLeDia-IP
+`203.0.113.55` ist nur ein Platzhalter. Verwende hier die echte öffentliche Admin-, VPN- oder Jump-Host-IP deiner eLeDia-Umgebung.
 
 Wenn du unsicher bist, nimm lieber zuerst nur SSH in Betrieb und prüfe danach die Web-Jails gegen Logs.
 

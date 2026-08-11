@@ -1,0 +1,10 @@
+---
+# Example variables for isolated libvirt/KVM test targets.
+fail2ban_nft_whitelist_discovery_mode: comment
+fail2ban_nft_whitelist_comment_markers:
+  - fail2ban-ignore
+fail2ban_nft_admin_comment_markers:
+  - fail2ban-admin
+fail2ban_nft_whitelist_import_enabled: true
+fail2ban_nft_whitelist_require_match: true
+fail2ban_sshd_port: "22,3333"
