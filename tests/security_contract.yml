@@ -47,6 +47,13 @@
         lookup('file', playbook_dir + '/../roles/install-fail2ban/tasks/preflight.yml')
         | from_yaml
       }}
+    install_config_tasks: >-
+      {{
+        lookup('file', playbook_dir + '/../roles/install-fail2ban/tasks/install-config.yml')
+        | from_yaml
+      }}
+    fail2ban_daemon_config: >-
+      {{ lookup('file', playbook_dir + '/../roles/install-fail2ban/files/99-web-protection.local') }}
     safety_check_task_names:
       - "Preflight | validate nft whitelist discovery mode"
       - "Preflight | validate nft whitelist set types"
@@ -92,6 +99,81 @@
           {{
             preflight_tasks
             | selectattr('name', 'equalto', 'Preflight | warn about disabled whitelist safety checks')
+            | list
+          }}
+
+    - name: "Test | require recidive log bootstrap"
+      assert:
+        that:
+          - recidive_log_tasks | length == 1
+          - recidive_log_tasks[0]['copy']['dest'] == '/var/log/fail2ban.log'
+          - not (recidive_log_tasks[0]['copy']['force'] | bool)
+          - "'fail2ban_recidive_enabled' in (recidive_log_tasks[0].when | string)"
+      vars:
+        recidive_log_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Config | prepare recidive log')
+            | list
+          }}
+
+    - name: "Test | require explicit IPv6 mode"
+      assert:
+        that:
+          - "'allowipv6 = auto' in fail2ban_daemon_config"
+
+    - name: "Test | require package jail.conf recovery"
+      assert:
+        that:
+          - jail_conf_stat_tasks | length == 1
+          - jail_conf_restore_tasks | length == 1
+          - jail_conf_stat_tasks[0]['stat']['path'] == '/etc/fail2ban/jail.conf'
+          - jail_conf_policy_tasks | length == 1
+          - jail_conf_policy_tasks[0]['copy']['dest'] == '/usr/sbin/policy-rc.d'
+          - "'exit 101' in jail_conf_policy_tasks[0]['copy']['content']"
+          - jail_conf_reinstall_tasks | length == 1
+          - "'--force-confmiss' in jail_conf_reinstall_tasks[0]['command']['cmd']"
+          - "'--reinstall' in jail_conf_reinstall_tasks[0]['command']['cmd']"
+          - jail_conf_policy_cleanup_tasks | length == 1
+          - jail_conf_policy_restore_tasks | length == 1
+          - "'not fail2ban_jail_conf_stat.stat.exists' in (jail_conf_restore_tasks[0].when | string)"
+      vars:
+        jail_conf_stat_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Setup | check package jail.conf')
+            | list
+          }}
+        jail_conf_restore_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Setup | restore missing package jail.conf')
+            | list
+          }}
+        jail_conf_restore_block: "{{ jail_conf_restore_tasks[0].block | default([]) }}"
+        jail_conf_restore_always: "{{ jail_conf_restore_tasks[0].always | default([]) }}"
+        jail_conf_policy_tasks: >-
+          {{
+            jail_conf_restore_block
+            | selectattr('name', 'equalto', 'Setup | install temporary service policy')
+            | list
+          }}
+        jail_conf_reinstall_tasks: >-
+          {{
+            jail_conf_restore_block
+            | selectattr('name', 'equalto', 'Setup | reinstall Fail2Ban package')
+            | list
+          }}
+        jail_conf_policy_cleanup_tasks: >-
+          {{
+            jail_conf_restore_always
+            | selectattr('name', 'equalto', 'Setup | remove temporary service policy')
+            | list
+          }}
+        jail_conf_policy_restore_tasks: >-
+          {{
+            jail_conf_restore_always
+            | selectattr('name', 'equalto', 'Setup | restore existing service policy')
             | list
           }}
 

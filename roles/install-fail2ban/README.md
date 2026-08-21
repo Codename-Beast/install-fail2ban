@@ -2,21 +2,21 @@
   <img src="assets/elediav2.png" alt="eLeDia" width="720">
 </p>
 
-# 🛡️ install-fail2ban
+# install-fail2ban
 
 Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Service neu geladen oder gestartet wird.
 
-Vorab Infos Einholen ohne Installation :
+Status prüfen, ohne etwas zu ändern:
 ```bash
 ansible-playbook install_fail2ban.yml -e 'hosts=hustensaft' -e 'report_only=true' -i inventory/hc-moodle
 ```
-Installation auf den Server brügeln :
+Rolle ausführen:
 
 ```bash
 ansible-playbook install_fail2ban.yml -e 'hosts=hc-hustensaft' -i inventory/hc-moodle
 ```
 
-Abhängigkeiten für die vollständigen Whitelist-Sicherheitschecks auf dem Controller :
+Abhängigkeiten für die Whitelist-Prüfungen auf dem Controller:
 
 ```bash
 ansible-galaxy collection install -r collections/requirements.yml
@@ -25,12 +25,12 @@ python3 -m pip install 'netaddr==1.3.0'
 
 ---
 
-## ⚙️ Zusammenfassung
+## Kurzüberblick
 
-| Service-Name | Stand |
+| Punkt | Wert |
 |---|---|
 | Zielsystem | Debian / Ubuntu |
-| Firewall | nftables, sollte installiert sein |
+| Firewall | nftables muss vorhanden sein |
 | SSH | systemd-journal, Ports `22` und `3333` |
 | Apache-Logs | unter `/var/log/apache2` |
 
@@ -38,12 +38,12 @@ Die Rolle schreibt keine globale `[DEFAULT]`-Jail-Konfiguration. Alle verwaltete
 
 ---
 
-## ⚙️ Was die Rolle macht
+## Was die Rolle macht
 
-- installiert `fail2ban`, wenn das Paket fehlt
-- überspringt `apt`, wenn alle benötigten Pakete bereits vorhanden sind
+- installiert nur die Pakete, die noch fehlen
+- lässt die paketverwaltete `/etc/fail2ban/jail.conf` unverändert und stellt sie per Paket-Reinstallation wieder her, falls sie fehlt; Paket-Skripte dürfen Fail2Ban dabei nicht vor der Konfigurationsprüfung neu starten
 - legt optional ein einmaliges Backup von `/etc/fail2ban` an
-- installiert Filter, Jails und Daemon-Konfiguration
+- schreibt eigene Jails nach `/etc/fail2ban/jail.d/99-apache-moodle-bots.local` sowie Filter und Daemon-Konfiguration
 - rendert Scanner- und User-Agent-Filter aus Variablen
 - prüft mit `fail2ban-client -t`, bevor Fail2Ban neu geladen oder gestartet wird
 - prüft nach der Aktivierung den Fail2Ban Service und aktive Jails
@@ -51,7 +51,7 @@ Die Rolle schreibt keine globale `[DEFAULT]`-Jail-Konfiguration. Alle verwaltete
 
 ---
 
-## 🔒 Aktive Jails
+## Aktive Jails
 
 Standardmäßig aktiv:
 
@@ -81,7 +81,7 @@ Hinweis: `apache-badbots` ist in dieser Rolle aktiv, sollte aber wie alle breite
 
 ---
 
-## 🧱 Whitelist und nftables
+## Whitelist und nftables
 
 Loopback ist immer freigestellt:
 
@@ -142,7 +142,7 @@ fail2ban_allowed_ips:
 
 ---
 
-## 🕵️ User-Agent-Schutz
+## User-Agent-Schutz
 
 `apache-scanner-useragents` erkennt klar benannte Scanner. Die Liste kann pro Umgebung ergänzt werden:
 
@@ -182,7 +182,7 @@ Low-and-Slow-Scanning ist die Grenze jedes kurzen Schwellwert-Fensters: Wer z.B.
 
 ---
 
-## 🧰 Filter erweitern
+## Filter erweitern
 
 Neue Scanner-User-Agents gehören nicht direkt ins Regex. Nutze dafür Variablen:
 
@@ -214,7 +214,7 @@ Faustregel: Nur Dinge aufnehmen, die normale Moodle-Nutzer nie abrufen sollten. 
 
 ---
 
-## ✅ Wiederholbare Qualitätschecks
+## Lokale Prüfungen
 
 Zusätzliche Repo-Checks für bekannte Fehlerklassen:
 
@@ -236,7 +236,7 @@ Die Checks prüfen Syntax, Whitelist-Vertrag, IPv4/IPv6-Werte und die exakten Tr
 
 ---
 
-## 📋 Jail-Überblick
+## Jail-Überblick
 
 | Jail | Konfidenz/Signal | Default | Standard-Verhalten |
 |---|---|---:|---|
@@ -261,7 +261,7 @@ Die Checks prüfen Syntax, Whitelist-Vertrag, IPv4/IPv6-Werte und die exakten Tr
 
 ---
 
-## 🧩 Wichtige Variablen
+## Wichtige Variablen
 
 ```yaml
 fail2ban_sshd_enabled: true
@@ -315,7 +315,7 @@ fail2ban_recidive_findtime: 7d
 fail2ban_recidive_bantime: -1
 ```
 
-## 📈 Fail2Ban Prometheus Exporter
+## Fail2Ban Prometheus Exporter
 
 Optional:
 
@@ -329,7 +329,7 @@ Der Exporter läuft nach `fail2ban.service`, liest `/var/run/fail2ban/fail2ban.s
 
 ---
 
-## 🧯 Rollback
+## Rollback
 
 Die Rolle kann vor ihren Änderungen ein einmaliges Backup anlegen:
 
@@ -364,7 +364,7 @@ sudo systemctl restart fail2ban
 
 ---
 
-## 📚 Weitere Dokumente
+## Weitere Dokumente
 
 - `MANUELL.md`: bewusst schlanker Basis-/Notfall-Auszug; vollständige Jail-Übersicht bleibt hier im README
 - `CHANGELOG.md`: Änderungen und Versionen
@@ -373,7 +373,7 @@ sudo systemctl restart fail2ban
 
 Die echten VM-Inventare bleiben lokal und werden über `.gitignore` ausgeschlossen.
 
-## 🧾 Unterstützte Ansible-Versionen
+## Unterstützte Ansible-Versionen
 
 - Rollen-Version `2.0.0`
 - ansible-core 2.12.10

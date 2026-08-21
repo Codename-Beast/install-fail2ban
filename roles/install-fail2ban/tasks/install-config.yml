@@ -32,6 +32,89 @@
     policy_rc_d: 101
   when: fail2ban_missing_packages | length > 0
 
+# jail.conf belongs to the Debian package. If it was deleted, restore the
+# matching package version instead of maintaining a second copy in this role.
+- name: "Setup | check package jail.conf"
+  stat:
+    path: /etc/fail2ban/jail.conf
+  register: fail2ban_jail_conf_stat
+
+- name: "Setup | restore missing package jail.conf"
+  when: not fail2ban_jail_conf_stat.stat.exists
+  block:
+    - name: "Setup | create service policy backup directory"
+      tempfile:
+        state: directory
+        path: /tmp
+        prefix: install-fail2ban-policy-
+      register: fail2ban_policy_rc_d_tempdir
+
+    - name: "Setup | check existing service policy"
+      stat:
+        path: /usr/sbin/policy-rc.d
+        follow: false
+      register: fail2ban_policy_rc_d_stat
+
+    - name: "Setup | preserve existing service policy"
+      command:
+        argv:
+          - mv
+          - --
+          - /usr/sbin/policy-rc.d
+          - "{{ fail2ban_policy_rc_d_tempdir.path }}/policy-rc.d"
+      register: fail2ban_policy_rc_d_backup
+      changed_when: true
+      when: fail2ban_policy_rc_d_stat.stat.exists
+
+    - name: "Setup | install temporary service policy"
+      copy:
+        dest: /usr/sbin/policy-rc.d
+        content: |
+          #!/bin/sh
+          exit 101
+        owner: root
+        group: root
+        mode: "0755"
+      register: fail2ban_temporary_policy_rc_d
+
+    - name: "Setup | reinstall Fail2Ban package"
+      command:
+        cmd: >-
+          apt-get -o Dpkg::Options::=--force-confmiss
+          --reinstall install --yes fail2ban
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      changed_when: true
+      # The apt module cannot reinstall an already installed package.
+      # noqa: command-instead-of-module
+
+  always:
+    - name: "Setup | remove temporary service policy"
+      file:
+        path: /usr/sbin/policy-rc.d
+        state: absent
+      when:
+        - fail2ban_temporary_policy_rc_d is defined
+        - not (fail2ban_temporary_policy_rc_d.skipped | default(false))
+
+    - name: "Setup | restore existing service policy"
+      command:
+        argv:
+          - mv
+          - --
+          - "{{ fail2ban_policy_rc_d_tempdir.path }}/policy-rc.d"
+          - /usr/sbin/policy-rc.d
+      changed_when: true
+      when:
+        - fail2ban_policy_rc_d_backup is defined
+        - fail2ban_policy_rc_d_backup.changed | default(false)
+
+    - name: "Setup | remove service policy backup directory"
+      file:
+        path: "{{ fail2ban_policy_rc_d_tempdir.path }}"
+        state: absent
+      when: fail2ban_policy_rc_d_tempdir is defined
+
 # Backup nur einmalig vorbereiten. Der Marker verhindert Archiv-Spam bei wiederholten Läufen.
 - name: "Backup | create backup dir"
   file:
@@ -89,6 +172,18 @@
     - /etc/fail2ban/fail2ban.d
     - /etc/fail2ban/filter.d
     - /etc/fail2ban/jail.d
+
+# recidive reads Fail2Ban's own log. On a fresh install the service has not run
+# yet, so the file must exist before fail2ban-client validates the jails.
+- name: "Config | prepare recidive log"
+  copy:
+    content: ""
+    dest: /var/log/fail2ban.log
+    owner: root
+    group: adm
+    mode: "0640"
+    force: false
+  when: fail2ban_recidive_enabled | bool
 
 # Eingeschaltete Built-in-Jails müssen auf dem Zielhost wirklich vorhanden sein.
 - name: "Config | check built-in filters"

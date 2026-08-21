@@ -1,4 +1,5 @@
 [Definition]
+allowipv6 = auto
 loglevel = INFO
 logtarget = /var/log/fail2ban.log
 dbfile = /var/lib/fail2ban/fail2ban.sqlite3

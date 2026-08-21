@@ -4,6 +4,21 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- Die Rolle legt `/var/log/fail2ban.log` vor dem Konfigurationstest an, wenn `recidive` aktiv ist. Dadurch endet eine frische Installation nicht mehr mit Exit-Code 255, nur weil Fail2Ban seine eigene Logdatei noch nicht erzeugen konnte. Eine vorhandene Logdatei wird nicht überschrieben.
+- Eine fehlende `/etc/fail2ban/jail.conf` wird aus der installierten Fail2Ban-Paketversion wiederhergestellt. Die Rolle pflegt weiterhin nur ihre eigene Datei unter `jail.d`.
+- Die Wiederherstellung der `jail.conf` unterdrückt Paket-Serviceaktionen über eine temporäre `policy-rc.d`. Eine vorhandene Policy wird anschließend unverändert wiederhergestellt.
+
+### Changed
+
+- README-Überschriften und Jail-Kommentare gestrafft. Die technischen Hinweise bleiben erhalten, ohne jede Sektion dekorativ aufzublähen.
+- Der IPv6-Modus ist explizit auf `auto` gesetzt; damit entfällt die gleichnamige Fail2Ban-Standardwert-Warnung.
+
+---
+
 ## [2.0.0] - 2026-08-11
 
 ### Migration

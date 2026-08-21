@@ -13,10 +13,8 @@
 {% set webservice_ignoreip = (ignoreip_list + (fail2ban_moodle_webservice_abuse_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 {% set behat_ignoreip = (ignoreip_list + (fail2ban_moodle_behat_access_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 
-# -----------------------------------------------------------------------------
 # SSH brute-force protection.
 # Keep this conservative: an SSH lockout is operationally worse than a temporary missed ban.
-# -----------------------------------------------------------------------------
 [sshd]
 enabled = {{ fail2ban_sshd_enabled | bool | ternary('true', 'false') }}
 filter = sshd
@@ -36,10 +34,8 @@ bantime.multipliers = {{ fail2ban_sshd_bantime_multipliers }}
 bantime.maxtime = {{ fail2ban_sshd_bantime_maxtime }}
 bantime.rndtime = {{ fail2ban_sshd_bantime_rndtime }}
 
-# -----------------------------------------------------------------------------
 # malicious paths: foreign apps, secrets, web shells, known exploits.
 # One match is enough for a permanent HTTP/HTTPS ban.
-# -----------------------------------------------------------------------------
 [apache-malicious-paths]
 enabled = {{ fail2ban_malicious_paths_enabled | bool | ternary('true', 'false') }}
 filter = apache-malicious-paths
@@ -58,10 +54,8 @@ bantime = {{ fail2ban_malicious_paths_bantime }}
 bantime.increment = false
 bantime.rndtime = 0
 
-# -----------------------------------------------------------------------------
 # Moodle Badbots: authentication/token endpoint abuse.
 # Threshold-based: one failed login is not a ban, repeated automated POSTs are.
-# -----------------------------------------------------------------------------
 [moodle-badbots]
 enabled = {{ fail2ban_moodle_badbots_enabled | bool | ternary('true', 'false') }}
 filter = moodle-badbots
@@ -82,10 +76,8 @@ bantime.multipliers = {{ fail2ban_moodle_badbots_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_badbots_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_badbots_rndtime }}
 
-# -----------------------------------------------------------------------------
 # Moodle Webservice abuse: high-volume API execution after token acquisition.
 # Threshold-based because mobile apps and integrations legitimately use it.
-# -----------------------------------------------------------------------------
 [moodle-webservice-abuse]
 enabled = {{ fail2ban_moodle_webservice_abuse_enabled | bool | ternary('true', 'false') }}
 filter = moodle-webservice-abuse
@@ -106,10 +98,8 @@ bantime.multipliers = {{ fail2ban_moodle_webservice_abuse_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_webservice_abuse_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_webservice_abuse_rndtime }}
 
-# -----------------------------------------------------------------------------
 # Moodle password reset abuse: repeated account-enumeration form submissions.
 # Lower threshold than login abuse because normal users rarely repeat this often.
-# -----------------------------------------------------------------------------
 [moodle-password-reset-abuse]
 enabled = {{ fail2ban_moodle_password_reset_abuse_enabled | bool | ternary('true', 'false') }}
 filter = moodle-password-reset-abuse
@@ -130,10 +120,8 @@ bantime.multipliers = {{ fail2ban_moodle_password_reset_abuse_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_password_reset_abuse_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_password_reset_abuse_rndtime }}
 
-# -----------------------------------------------------------------------------
 # Moodle Behat exposure: public 200 responses and probes for leftover Behat paths.
 # First hit bans immediately; repeat offenders escalate beyond the initial short ban.
-# -----------------------------------------------------------------------------
 [moodle-behat-access]
 enabled = {{ fail2ban_moodle_behat_access_enabled | bool | ternary('true', 'false') }}
 filter = moodle-behat-access
@@ -154,10 +142,8 @@ bantime.multipliers = {{ fail2ban_moodle_behat_access_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_behat_access_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_behat_access_rndtime }}
 
-# -----------------------------------------------------------------------------
 # Explicitly named scanners in the User-Agent.
 # The list comes from defaults/main.yml and can be extended per host.
-# -----------------------------------------------------------------------------
 [apache-scanner-useragents]
 enabled = {{ fail2ban_scanner_useragents_enabled | bool | ternary('true', 'false') }}
 filter = apache-scanner-useragents
@@ -177,10 +163,8 @@ bantime.increment = false
 bantime.rndtime = 0
 
 
-# -----------------------------------------------------------------------------
-# Unusual User-Agents: missing/empty/oversized UA and explicit scanner UAs.
+# Unusual User-Agents: missing, empty or oversized values.
 # Immediate short nftables ban; recidive escalates repeat offenders to all ports.
-# -----------------------------------------------------------------------------
 [apache-unusual-useragents]
 enabled = {{ fail2ban_unusual_useragents_enabled | bool | ternary('true', 'false') }}
 filter = apache-unusual-useragents
@@ -199,10 +183,8 @@ bantime = {{ fail2ban_unusual_useragents_bantime }}
 bantime.increment = false
 bantime.rndtime = 0
 
-# -----------------------------------------------------------------------------
 # Wide path scans across many 400/403/404/405/408/414 responses.
 # This jail is not immediately permanent because NAT/campus IPs may represent many valid users.
-# -----------------------------------------------------------------------------
 [apache-scanburst]
 enabled = {{ fail2ban_scanburst_enabled | bool | ternary('true', 'false') }}
 filter = apache-scanburst
@@ -226,10 +208,8 @@ bantime.rndtime = {{ fail2ban_scanburst_rndtime }}
 # jails to extend this jail's escalation history as well.
 bantime.overalljails = {{ fail2ban_scanburst_overalljails | bool | ternary('true', 'false') }}
 
-# -----------------------------------------------------------------------------
 # Low-and-slow scan detection across the same client-error signal as scanburst.
 # Optional because long windows can hit NAT/campus IPs on noisy public systems.
-# -----------------------------------------------------------------------------
 [apache-slow-scan]
 enabled = {{ fail2ban_slow_scan_enabled | bool | ternary('true', 'false') }}
 # Reuse the scanburst filter deliberately: same 4xx signal, much longer window.
@@ -254,9 +234,7 @@ bantime.rndtime = {{ fail2ban_slow_scan_rndtime }}
 # local to slow-scan instead of coupling it to every other jail.
 bantime.overalljails = {{ fail2ban_slow_scan_overalljails | bool | ternary('true', 'false') }}
 
-# -----------------------------------------------------------------------------
 # Built-in Apache overflow filter.
-# -----------------------------------------------------------------------------
 [apache-overflows]
 enabled = {{ fail2ban_overflows_enabled | bool | ternary('true', 'false') }}
 filter = apache-overflows
@@ -275,9 +253,7 @@ bantime = {{ fail2ban_overflows_bantime }}
 bantime.increment = false
 bantime.rndtime = 0
 
-# -----------------------------------------------------------------------------
 # Built-in Shellshock filter. Shellshock probes are high-confidence signals.
-# -----------------------------------------------------------------------------
 [apache-shellshock]
 enabled = {{ fail2ban_shellshock_enabled | bool | ternary('true', 'false') }}
 filter = apache-shellshock
@@ -296,10 +272,8 @@ bantime = {{ fail2ban_shellshock_bantime }}
 bantime.increment = false
 bantime.rndtime = 0
 
-# -----------------------------------------------------------------------------
 # Optional: Apache Basic/Digest Auth. This is not the Moodle form login.
 # Enable only when Apache Auth is actually used.
-# -----------------------------------------------------------------------------
 [apache-auth]
 enabled = {{ fail2ban_apache_auth_enabled | bool | ternary('true', 'false') }}
 filter = apache-auth
@@ -317,10 +291,8 @@ findtime = {{ fail2ban_apache_auth_findtime }}
 bantime = {{ fail2ban_apache_auth_bantime }}
 
 
-# -----------------------------------------------------------------------------
 # Infrastructure admin exposure: Solr Admin and HAProxy stats on public vhosts.
 # High-confidence but default-off; segmentation remains the real control.
-# -----------------------------------------------------------------------------
 [apache-infra-admin-exposure]
 enabled = {{ fail2ban_infra_admin_exposure_enabled | bool | ternary('true', 'false') }}
 filter = apache-infra-admin-exposure
@@ -339,10 +311,8 @@ bantime = {{ fail2ban_infra_admin_exposure_bantime }}
 bantime.increment = false
 bantime.rndtime = 0
 
-# -----------------------------------------------------------------------------
 # Optional fake Googlebot detection. Uses Fail2Ban's built-in rDNS ignorecommand.
 # Default-off because this jail performs DNS lookups unlike the other web jails.
-# -----------------------------------------------------------------------------
 [apache-fakegooglebot]
 enabled = {{ fail2ban_apache_fakegooglebot_enabled | bool | ternary('true', 'false') }}
 filter = apache-fakegooglebot
@@ -362,11 +332,9 @@ bantime.increment = false
 bantime.rndtime = 0
 ignorecommand = %(fail2ban_confpath)s/filter.d/ignorecommands/apache-fakegooglebot <ip> {{ fail2ban_apache_fakegooglebot_ignorecommand_timeout }}
 
-# -----------------------------------------------------------------------------
 # Optional: built-in Apache bot helper filters.
 # apache-badbots is enabled by current role default; apache-botsearch stays
 # default-off. Test broad built-in bot filters against real logs before rollout.
-# -----------------------------------------------------------------------------
 [apache-badbots]
 enabled = {{ fail2ban_apache_badbots_enabled | bool | ternary('true', 'false') }}
 filter = apache-badbots
@@ -399,10 +367,8 @@ maxretry = {{ fail2ban_apache_botsearch_maxretry }}
 findtime = {{ fail2ban_apache_botsearch_findtime }}
 bantime = {{ fail2ban_apache_botsearch_bantime }}
 
-# -----------------------------------------------------------------------------
 # Repeat offenders: sources banned multiple times by other jails within the window
 # are blocked permanently on all ports.
-# -----------------------------------------------------------------------------
 [recidive]
 enabled = {{ fail2ban_recidive_enabled | bool | ternary('true', 'false') }}
 filter = recidive
