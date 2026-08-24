@@ -34,39 +34,32 @@ fail2ban_base_ignoreip:
 # Additional legacy entries. Base loopback entries are always merged separately.
 fail2ban_ignoreip: []
 
-# Additional trusted source IPs. nftables is the primary source.
+# Additional trusted source IPs. These are merged into ignoreip. The role does
+# not import existing nftables sets as whitelist input.
 fail2ban_trusted_ips: []
 fail2ban_allowed_ips: []
+# Admin/VPN/jump-host addresses. They are also merged into ignoreip and can be
+# written to an optional nftables set file when explicitly enabled below.
+fail2ban_admin_ips: []
 # Example:
-# fail2ban_allowed_ips:
+# fail2ban_admin_ips:
 #   - 203.0.113.55
+# fail2ban_allowed_ips:
 #   - 198.51.100.0/24
 
-# Import only nftables address sets whose exact comment declares the trust class.
-# This prevents unrelated accept rules, dead chains, CDN sets, or service-specific
-# source lists from silently becoming global Fail2Ban exemptions.
-fail2ban_nft_whitelist_import_enabled: true
-fail2ban_nft_whitelist_require_match: true
-# Temporary migration switch: false skips whitelist format/match/IP checks and the
-# SSH admin guard. It does not add any exemption and should be re-enabled once the
-# trusted admin/monitoring sources are known.
-fail2ban_whitelist_safety_checks_enabled: true
-fail2ban_nft_whitelist_discovery_mode: comment
-fail2ban_nft_whitelist_comment_markers:
-  - fail2ban-ignore
-fail2ban_nft_admin_comment_markers:
-  - fail2ban-admin
-
-# Optional explicit mode for infrastructures that cannot add nftables comments.
-# Values are exact family/table/set identities; no firewall rules are inferred.
-fail2ban_nft_whitelist_explicit_set_keys: []
-fail2ban_nft_admin_explicit_set_keys: []
-# Example:
-# fail2ban_nft_whitelist_discovery_mode: explicit
-# fail2ban_nft_whitelist_explicit_set_keys:
-#   - inet/filter/trusted_monitoring
-# fail2ban_nft_admin_explicit_set_keys:
-#   - inet/filter/trusted_admins
+# -- Optional nftables allow-set file --------------------------------
+# Default-off. This writes a separate nftables fragment from the explicit
+# variables above. It never reads/imports existing nftables sets.
+fail2ban_nft_allow_sets_enabled: false
+fail2ban_nft_allow_sets_file: /etc/nftables.d/90-fail2ban-allowsets.nft
+fail2ban_nft_allow_sets_overwrite: false
+fail2ban_nft_allow_sets_apply: false
+fail2ban_nft_allow_table_family: inet
+fail2ban_nft_allow_table_name: fail2ban_allow
+fail2ban_nft_allow_admin_set_v4: fail2ban_admin_v4
+fail2ban_nft_allow_admin_set_v6: fail2ban_admin_v6
+fail2ban_nft_allow_allowed_set_v4: fail2ban_allowed_v4
+fail2ban_nft_allow_allowed_set_v6: fail2ban_allowed_v6
 
 # -- Log paths -----------------------------------------------------
 # Active logs only. Do not use *access.log because rotated files may be included.
@@ -165,6 +158,8 @@ fail2ban_moodle_badbots_bantime: 2h
 fail2ban_moodle_badbots_multipliers: "1 2 6 24"
 fail2ban_moodle_badbots_maxtime: 7d
 fail2ban_moodle_badbots_rndtime: 5m
+# Jail-local allowlist for known campus/NAT/mobile-app gateways.
+fail2ban_moodle_badbots_ignoreip: []
 
 # -- Moodle Webservice abuse ---------------------------------------
 # GET/POST volume on real web-service execution endpoints. Threshold is higher
@@ -191,6 +186,21 @@ fail2ban_moodle_password_reset_abuse_bantime: 4h
 fail2ban_moodle_password_reset_abuse_multipliers: "1 2 6 24"
 fail2ban_moodle_password_reset_abuse_maxtime: 14d
 fail2ban_moodle_password_reset_abuse_rndtime: 5m
+# Jail-local allowlist for known helpdesk/admin/proxy sources if reset workflows are automated.
+fail2ban_moodle_password_reset_abuse_ignoreip: []
+
+# -- Moodle public form abuse ---------------------------------------
+# Repeated POST submissions to public signup/contact forms. Kept active but
+# threshold-based because legitimate users can submit forms once or twice.
+fail2ban_moodle_form_abuse_enabled: true
+fail2ban_moodle_form_abuse_maxretry: 5
+fail2ban_moodle_form_abuse_findtime: 10m
+fail2ban_moodle_form_abuse_bantime: 4h
+fail2ban_moodle_form_abuse_multipliers: "1 2 6 24"
+fail2ban_moodle_form_abuse_maxtime: 14d
+fail2ban_moodle_form_abuse_rndtime: 5m
+# Jail-local allowlist for known CRM/helpdesk/form-checker sources.
+fail2ban_moodle_form_abuse_ignoreip: []
 
 # -- Moodle Behat exposure watch ------------------------------------
 # HTTP 200 on a Behat path means public exposure and is banned immediately.

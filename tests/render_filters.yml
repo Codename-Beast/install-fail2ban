@@ -71,6 +71,19 @@
         dest: "{{ fail2ban_render_dir }}/fail2ban-exporter.service"
         mode: "0644"
 
+    - name: "Test | render nftables allow-set template"
+      template:
+        src: ../roles/install-fail2ban/templates/fail2ban-allowsets.nft.j2
+        dest: "{{ fail2ban_render_dir }}/fail2ban-allowsets.nft"
+        mode: "0644"
+      vars:
+        fail2ban_admin_ips:
+          - 203.0.113.55
+          - 2001:db8::55
+        fail2ban_allowed_ips:
+          - 198.51.100.0/24
+          - 2001:db8:100::/48
+
     - name: "Test | show rendered templates"
       debug:
         msg:
@@ -80,3 +93,4 @@
           - "{{ fail2ban_render_dir }}/apache-unusual-useragents-empty.conf"
           - "{{ fail2ban_render_dir }}/99-apache-moodle-bots.local"
           - "{{ fail2ban_render_dir }}/fail2ban-exporter.service"
+          - "{{ fail2ban_render_dir }}/fail2ban-allowsets.nft"

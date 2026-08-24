@@ -1,16 +1,4 @@
 ---
-# nftables is the source of truth. Only sets with explicit trust comments are
-# imported; unrelated accept-rule sets never become global Fail2Ban exemptions.
-fail2ban_nft_whitelist_import_enabled: true
-fail2ban_nft_whitelist_require_match: true
-# Temporary migration mode until the real admin/monitoring exemptions are known.
-# Re-enable immediately after fail2ban-admin/fail2ban-ignore have been defined.
-fail2ban_whitelist_safety_checks_enabled: false
-fail2ban_nft_whitelist_discovery_mode: comment
-fail2ban_nft_whitelist_comment_markers:
-  - fail2ban-ignore
-fail2ban_nft_admin_comment_markers:
-  - fail2ban-admin
-
-# Fail2Ban protects both SSH listeners.
-fail2ban_sshd_port: "22,3333"
+# Explicit Fail2Ban allowlists. nftables sets are not imported as ignoreip.
+fail2ban_trusted_ips: []
+fail2ban_allowed_ips: []

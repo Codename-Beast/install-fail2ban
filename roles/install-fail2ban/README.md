@@ -6,21 +6,21 @@
 
 Ansible-Rolle für eLeDia Webserver mit Apache/Moodle. Sie installiert Fail2Ban, richtet die verwalteten Jails ein und prüft die Konfiguration, bevor der Service neu geladen oder gestartet wird.
 
-Status prüfen, ohne etwas zu ändern:
+Status prüfen, ohne etwas zu ändern (`run_role` ist der produktive Wrapper; das Repo-Playbook ist nur ein CI-/Test-Harness):
 ```bash
-ansible-playbook install_fail2ban.yml -e 'hosts=hustensaft' -e 'report_only=true' -i inventory/hc-moodle
+run_role install-fail2ban -e 'hosts=hustensaft' -e 'report_only=true'
 ```
 Rolle ausführen:
 
 ```bash
-ansible-playbook install_fail2ban.yml -e 'hosts=hc-hustensaft' -i inventory/hc-moodle
+run_role install-fail2ban -e 'hosts=hc-hustensaft'
 ```
 
-Abhängigkeiten für die Whitelist-Prüfungen auf dem Controller:
+Abhängigkeiten für lokale Tests:
 
 ```bash
 ansible-galaxy collection install -r collections/requirements.yml
-python3 -m pip install 'netaddr==1.3.0'
+python3 -m pip install -r requirements-test.txt
 ```
 
 ---
@@ -59,7 +59,8 @@ Standardmäßig aktiv:
 - `apache-malicious-paths`
 - `moodle-badbots`
 - `moodle-webservice-abuse`
-- `moodle-password-reset-abuse`
+- `moodle-pwreset-abuse`
+- `moodle-form-abuse`
 - `moodle-behat-access`
 - `apache-scanner-useragents`
 - `apache-unusual-useragents`
@@ -91,54 +92,40 @@ fail2ban_base_ignoreip:
   - "::1"
 ```
 
-Die Rolle liest `nft -j list ruleset`. Standardmäßig übernimmt sie nur Adress-Sets, die mit einem exakten Kommentar als vertrauenswürdig markiert sind:
+Die Rolle liest keine nftables-Sets mehr als Whitelist ein. Das war in gemischten Firewall-Setups zu fragil: ein falsch markiertes oder wiederverwendetes Set kann sonst unbeabsichtigt globale Fail2Ban-Ausnahmen erzeugen.
 
-- `fail2ban-ignore` für allgemeine Ausnahmen
-- `fail2ban-admin` für Admin-, VPN- oder Jump-Host-Adressen
-
-Ein Admin-Set wird automatisch auch allgemein freigestellt. Unmarkierte Sets und beliebige `accept`-Regeln werden nicht als Whitelist geraten.
-
-```nft
-set trusted_monitoring_v4 {
-    type ipv4_addr
-    comment "fail2ban-ignore"
-}
-
-set trusted_admin_v4 {
-    type ipv4_addr
-    comment "fail2ban-admin"
-}
-```
-
-Wenn Kommentare in der Firewall nicht möglich sind, können Sets über ihre genaue `family/table/set`-Identität angegeben werden:
+Zusätzliche Ausnahmen werden nur noch explizit per Inventory gesetzt:
 
 ```yaml
-fail2ban_nft_whitelist_discovery_mode: explicit
-fail2ban_nft_whitelist_explicit_set_keys:
-  - inet/filter/trusted_monitoring_v4
-fail2ban_nft_admin_explicit_set_keys:
-  - inet/filter/trusted_admin_v4
-```
-
-Solange noch nicht feststeht, welche Admin-, VPN-, Monitoring- oder Jump-Host-Adressen ausgenommen werden sollen, können die neuen Preflight-Checks vorübergehend deaktiviert werden:
-
-```yaml
-fail2ban_whitelist_safety_checks_enabled: false
-```
-
-Das überspringt die Marker-, Set-, IP/CIDR- und SSH-Admin-Prüfungen. Es legt aber **keine** Ausnahme an. `sshd` bleibt aktiv und kann deshalb auch eine Admin-IP bannen. Sobald die echten Ausnahmen feststehen, den Schalter wieder auf `true` setzen.
-
-Für SSH gibt es eine zusätzliche Lockout-Sicherung. Wenn `sshd` aktiv ist, muss eine Admin-, VPN- oder Jump-Host-Adresse über `fail2ban-admin`, `fail2ban_nft_admin_explicit_set_keys` oder `fail2ban_trusted_ips` ermittelt werden. Reine Monitoring-Adressen reichen dafür nicht.
-
-Zusätzliche Adressen:
-
-```yaml
-fail2ban_trusted_ips:
+fail2ban_admin_ips:
   - 203.0.113.55
+
+fail2ban_trusted_ips:
+  - 203.0.113.56
 
 fail2ban_allowed_ips:
   - 198.51.100.0/24
 ```
+
+`fail2ban_admin_ips` ist für Admin-, VPN- oder Jump-Host-Adressen gedacht. Die Werte landen in den verwalteten `ignoreip`-Zeilen. Optional kann die Rolle daraus eine eigene nftables-Fragmentdatei bauen. Das ist standardmäßig aus:
+
+```yaml
+fail2ban_nft_allow_sets_enabled: false
+fail2ban_nft_allow_sets_file: /etc/nftables.d/90-fail2ban-allowsets.nft
+fail2ban_nft_allow_sets_overwrite: false
+fail2ban_nft_allow_sets_apply: false
+```
+
+Wenn `fail2ban_nft_allow_sets_enabled: true` gesetzt ist, rendert die Rolle nur Sets aus den expliziten Variablen `fail2ban_admin_ips`, `fail2ban_trusted_ips` und `fail2ban_allowed_ips`. Sie liest weiterhin keine vorhandenen nftables-Sets ein.
+
+Schutz gegen versehentliches Überschreiben:
+
+- Existiert `fail2ban_nft_allow_sets_file` bereits, bricht die Rolle ab.
+- Überschreiben gibt es nur mit `fail2ban_nft_allow_sets_overwrite: true`.
+- Vor dem Schreiben prüft `nft -c -f` die gerenderte Datei.
+- Anwenden ist getrennt und bleibt aus, solange `fail2ban_nft_allow_sets_apply: false` gesetzt ist.
+
+Jail-spezifische Ausnahmen bleiben für bekannte Monitoring-, Campus-, Helpdesk- oder Integrationsquellen der bessere Weg, wenn die IP nur bei einem bestimmten Signal ausgenommen werden soll.
 
 ---
 
@@ -169,7 +156,11 @@ Generische Clients wie `curl`, `wget`, `python-requests` und `Go-http-client` si
 
 `moodle-webservice-abuse` zählt GET/POST-Aufrufe auf die echten Moodle-Webservice-Ausführungsendpunkte (`webservice/rest/server.php`, `webservice/xmlrpc/server.php`, `webservice/soap/server.php`). Das Jail ist bewusst threshold-basiert: Mobile Apps und Integrationen erzeugen legitime API-Last, deshalb liegt `maxretry` mit Standard `60` höher als bei `moodle-badbots`. Bekannte Integrations-Backends können jail-spezifisch über `fail2ban_moodle_webservice_abuse_ignoreip` ausgenommen werden, ohne sie global aus allen Jails herauszunehmen.
 
-`moodle-password-reset-abuse` zählt POSTs auf `login/forgot_password.php`, um Account-Enumeration über viele Reset-Versuche zu erkennen. Es ist ebenfalls threshold-basiert, aber mit niedrigerem Standard `maxretry: 8`, weil ein echter Nutzer dieses Formular normalerweise nicht mehrfach in kurzer Zeit absendet. Einzelne legitime Reset-Requests zählen als Ereignis, lösen allein aber keinen Ban aus.
+`moodle-badbots`, `moodle-pwreset-abuse` und `moodle-form-abuse` besitzen ebenfalls jail-spezifische `ignoreip`-Variablen. Diese sind für bekannte Campus-/NAT-/Helpdesk-/Monitoring-Quellen gedacht und vermeiden False Positives, ohne die IP global gegen High-Confidence-Probes wie `.env` oder Scanner-User-Agents blind zu machen.
+
+`moodle-pwreset-abuse` zählt POSTs auf `login/forgot_password.php`, um Account-Enumeration über viele Reset-Versuche zu erkennen. Es ist ebenfalls threshold-basiert, aber mit niedrigerem Standard `maxretry: 8`, weil ein echter Nutzer dieses Formular normalerweise nicht mehrfach in kurzer Zeit absendet. Einzelne legitime Reset-Requests zählen als Ereignis, lösen allein aber keinen Ban aus.
+
+`moodle-form-abuse` zählt POSTs auf öffentliche Moodle-Formulare, die häufig für Spam oder automatisierte Account-Erzeugung missbraucht werden: `login/signup.php` und `user/contactsitesupport.php`. Das Jail ist aktiv und streng feldgebunden, aber threshold-basiert (`maxretry: 5`), damit ein einzelner legitimer Formularversand nicht sperrt.
 
 `moodle-behat-access` überwacht Behat-bezogene Moodle-Pfade bei `200` und `404`. Ein `200` ist ein starkes Signal für öffentlich erreichbare Behat-Dateien und wird mit `maxretry: 1` sofort über die konfigurierte nftables-Aktion gedroppt. `404` bleibt enthalten, um Scans nach versteckten oder übrig gebliebenen Behat-Pfaden ebenfalls zu erfassen. Die erste Sperre bleibt bewusst temporär, weil dieses Jail auch 404-Probes enthält; Wiederholungstäter eskalieren über `bantime.increment` bis maximal `fail2ban_moodle_behat_access_maxtime`. Die HTTP-Antwort selbst muss Apache/Moodle liefern; Fail2Ban reagiert erst auf den Logeintrag.
 
@@ -244,7 +235,8 @@ Die Checks prüfen Syntax, Whitelist-Vertrag, IPv4/IPv6-Werte und die exakten Tr
 | `apache-malicious-paths` | High-Confidence Path | enabled | permanent |
 | `moodle-badbots` | Behavioral/Threshold | enabled | progressiv `2h` bis `7d` |
 | `moodle-webservice-abuse` | Behavioral/Threshold | enabled | progressiv `2h` bis `7d` |
-| `moodle-password-reset-abuse` | Behavioral/Threshold | enabled | progressiv `4h` bis `14d` |
+| `moodle-pwreset-abuse` | Behavioral/Threshold | enabled | progressiv `4h` bis `14d` |
+| `moodle-form-abuse` | Behavioral/Threshold | enabled | progressiv `4h` bis `14d` |
 | `moodle-behat-access` | High-Confidence/Probe gemischt | enabled | progressiv `1h` bis `30d` |
 | `apache-scanner-useragents` | High-Confidence UA | enabled | permanent |
 | `apache-unusual-useragents` | UA-Anomalie | enabled | fix `1h`, Wiederholung über `recidive` |
@@ -283,6 +275,13 @@ fail2ban_moodle_webservice_abuse_ignoreip: []
 fail2ban_moodle_password_reset_abuse_maxretry: 8
 fail2ban_moodle_password_reset_abuse_findtime: 10m
 fail2ban_moodle_password_reset_abuse_bantime: 4h
+fail2ban_moodle_password_reset_abuse_ignoreip: []
+
+fail2ban_moodle_form_abuse_enabled: true
+fail2ban_moodle_form_abuse_maxretry: 5
+fail2ban_moodle_form_abuse_findtime: 10m
+fail2ban_moodle_form_abuse_bantime: 4h
+fail2ban_moodle_form_abuse_ignoreip: []
 
 fail2ban_infra_admin_exposure_enabled: false
 fail2ban_infra_admin_exposure_maxretry: 1
@@ -345,11 +344,12 @@ Manuell zurückrollen:
 sudo rm -f \
   /etc/fail2ban/fail2ban.d/99-web-protection.local \
   /etc/fail2ban/filter.d/apache-malicious-paths.conf \
-  /etc/fail2ban/filter.d/moodle-badbots.conf \
-  /etc/fail2ban/filter.d/moodle-behat-access.conf \
   /etc/fail2ban/filter.d/apache-infra-admin-exposure.conf \
-  /etc/fail2ban/filter.d/moodle-password-reset-abuse.conf \
+  /etc/fail2ban/filter.d/moodle-badbots.conf \
   /etc/fail2ban/filter.d/moodle-webservice-abuse.conf \
+  /etc/fail2ban/filter.d/moodle-password-reset-abuse.conf \
+  /etc/fail2ban/filter.d/moodle-form-abuse.conf \
+  /etc/fail2ban/filter.d/moodle-behat-access.conf \
   /etc/fail2ban/filter.d/apache-scanner-useragents.conf \
   /etc/fail2ban/filter.d/apache-unusual-useragents.conf \
   /etc/fail2ban/filter.d/apache-scanburst.conf \

@@ -2,7 +2,7 @@
 #
 # Notes:
 # - No global [DEFAULT] section: this file must not change unrelated SSH/service jails.
-# - ignoreip is built from base values, explicit allowlists, and optional imported nftables sets.
+# - ignoreip is built from base values and explicit allowlists.
 
 {% set ignoreip_list = (fail2ban_effective_ignoreip | default((fail2ban_base_ignoreip | default([])) + (fail2ban_ignoreip | default([])))) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
 {% set ignoreip = ignoreip_list | join(' ') %}
@@ -10,7 +10,10 @@
 # integration backend, or monitoring host may be safe for one signal but must
 # still be visible to every unrelated jail.
 {% set infra_admin_ignoreip = (ignoreip_list + (fail2ban_infra_admin_exposure_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
+{% set moodle_badbots_ignoreip = (ignoreip_list + (fail2ban_moodle_badbots_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 {% set webservice_ignoreip = (ignoreip_list + (fail2ban_moodle_webservice_abuse_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
+{% set password_reset_ignoreip = (ignoreip_list + (fail2ban_moodle_password_reset_abuse_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
+{% set form_abuse_ignoreip = (ignoreip_list + (fail2ban_moodle_form_abuse_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 {% set behat_ignoreip = (ignoreip_list + (fail2ban_moodle_behat_access_ignoreip | default([]) | map('string') | map('trim') | reject('equalto', '') | list)) | unique | list | join(' ') %}
 
 # SSH brute-force protection.
@@ -61,7 +64,7 @@ enabled = {{ fail2ban_moodle_badbots_enabled | bool | ternary('true', 'false') }
 filter = moodle-badbots
 port = http,https
 protocol = tcp
-ignoreip = {{ ignoreip }}
+ignoreip = {{ moodle_badbots_ignoreip }}
 ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
 usedns = {{ fail2ban_usedns }}
 backend = {{ fail2ban_backend }}
@@ -100,12 +103,12 @@ bantime.rndtime = {{ fail2ban_moodle_webservice_abuse_rndtime }}
 
 # Moodle password reset abuse: repeated account-enumeration form submissions.
 # Lower threshold than login abuse because normal users rarely repeat this often.
-[moodle-password-reset-abuse]
+[moodle-pwreset-abuse]
 enabled = {{ fail2ban_moodle_password_reset_abuse_enabled | bool | ternary('true', 'false') }}
 filter = moodle-password-reset-abuse
 port = http,https
 protocol = tcp
-ignoreip = {{ ignoreip }}
+ignoreip = {{ password_reset_ignoreip }}
 ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
 usedns = {{ fail2ban_usedns }}
 backend = {{ fail2ban_backend }}
@@ -119,6 +122,28 @@ bantime.increment = true
 bantime.multipliers = {{ fail2ban_moodle_password_reset_abuse_multipliers }}
 bantime.maxtime = {{ fail2ban_moodle_password_reset_abuse_maxtime }}
 bantime.rndtime = {{ fail2ban_moodle_password_reset_abuse_rndtime }}
+
+# Moodle public form abuse: repeated signup/contact form submissions.
+# Threshold-based: one real form submit is allowed, automated bursts are banned.
+[moodle-form-abuse]
+enabled = {{ fail2ban_moodle_form_abuse_enabled | bool | ternary('true', 'false') }}
+filter = moodle-form-abuse
+port = http,https
+protocol = tcp
+ignoreip = {{ form_abuse_ignoreip }}
+ignoreself = {{ fail2ban_ignoreself | bool | ternary('true', 'false') }}
+usedns = {{ fail2ban_usedns }}
+backend = {{ fail2ban_backend }}
+banaction = {{ fail2ban_banaction }}
+action = %(action_)s
+logpath = {{ fail2ban_access_log }}
+maxretry = {{ fail2ban_moodle_form_abuse_maxretry }}
+findtime = {{ fail2ban_moodle_form_abuse_findtime }}
+bantime = {{ fail2ban_moodle_form_abuse_bantime }}
+bantime.increment = true
+bantime.multipliers = {{ fail2ban_moodle_form_abuse_multipliers }}
+bantime.maxtime = {{ fail2ban_moodle_form_abuse_maxtime }}
+bantime.rndtime = {{ fail2ban_moodle_form_abuse_rndtime }}
 
 # Moodle Behat exposure: public 200 responses and probes for leftover Behat paths.
 # First hit bans immediately; repeat offenders escalate beyond the initial short ban.

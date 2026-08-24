@@ -6,6 +6,10 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ## [Unreleased]
 
+### Added
+
+- Aktives Jail `moodle-form-abuse` ergänzt. Es erkennt threshold-basiert wiederholte POSTs auf `login/signup.php` und `user/contactsitesupport.php`, um Moodle-Registrierungs-/Kontaktformular-Spam und automatisierte Formularmissbrauchsversuche zu blocken.
+
 ### Fixed
 
 - Die Rolle legt `/var/log/fail2ban.log` vor dem Konfigurationstest an, wenn `recidive` aktiv ist. Dadurch endet eine frische Installation nicht mehr mit Exit-Code 255, nur weil Fail2Ban seine eigene Logdatei noch nicht erzeugen konnte. Eine vorhandene Logdatei wird nicht überschrieben.
@@ -13,6 +17,15 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 - Die Wiederherstellung der `jail.conf` unterdrückt Paket-Serviceaktionen über eine temporäre `policy-rc.d`. Eine vorhandene Policy wird anschließend unverändert wiederhergestellt.
 
 ### Changed
+
+- Custom-Webfilter strenger auf Apache Combined Log Format begrenzt: HTTP-Versionen sind explizit, Status/Size/Referer/User-Agent müssen vollständig vorhanden sein und es gibt keinen permissiven Rest-Match nach dem User-Agent. Dadurch können Fake-Requests in Referer/User-Agent die Request-Erkennung nicht übernehmen.
+- `.env`-Erkennung erweitert: neben `.env` und `.env.local` werden auch mehrteilige/typische Varianten wie `.env.local.php`, `.env-prod`, `.env_backup` und `.env~` unter beliebigen Pfaden als High-Confidence-Secret-Probe erkannt; gängige Prozent-Encoding-Varianten wie `/%2eenv`, `/.%65nv` und `/.env%2elocal` werden ebenfalls erfasst.
+
+- Jail-spezifische `ignoreip`-Variablen für `moodle-badbots`, `moodle-password-reset-abuse` und `moodle-form-abuse` ergänzt. Dadurch können bekannte Campus-/NAT-/Helpdesk-/Monitoring-Quellen von Behavioral-Threshold-Jails ausgenommen werden, ohne sie global gegen High-Confidence-Jails wie `.env`-Probes oder Scanner-User-Agents blindzustellen.
+- Der nftables-Whitelist-Import wurde entfernt. `ignoreip` entsteht nur noch aus `fail2ban_base_ignoreip`, `fail2ban_ignoreip`, `fail2ban_trusted_ips`, `fail2ban_admin_ips` und `fail2ban_allowed_ips`; dadurch kann kein Firewall-Set mehr unbeabsichtigt globale Fail2Ban-Ausnahmen erzeugen.
+- Optionales, default-off nftables-Set-Rendering ergänzt: Die Rolle kann aus expliziten Admin-/Allowed-IP-Variablen eine eigene Fragmentdatei unter `/etc/nftables.d/` bauen, validiert sie mit `nft -c -f` und überschreibt bestehende Dateien nur mit gesetztem `fail2ban_nft_allow_sets_overwrite`. Bestehende nftables-Sets werden dabei nicht importiert.
+
+- Das Password-Reset-Jail heißt im gerenderten Fail2Ban-Status nun `moodle-pwreset-abuse`, verwendet aber weiterhin den Filter `moodle-password-reset-abuse`. Der kürzere Jail-Name vermeidet Fail2Ban-Warnungen über zu lange Jail-/Action-Namen.
 
 - README-Überschriften und Jail-Kommentare gestrafft. Die technischen Hinweise bleiben erhalten, ohne jede Sektion dekorativ aufzublähen.
 - Der IPv6-Modus ist explizit auf `auto` gesetzt; damit entfällt die gleichnamige Fail2Ban-Standardwert-Warnung.
@@ -23,14 +36,10 @@ Alle relevanten Änderungen an dieser Rolle werden hier dokumentiert.
 
 ### Migration
 
-- Der nftables-Whitelist-Import verwendet standardmäßig explizite Set-Kommentare statt beliebiger direkter `accept`-Regeln. Vertrauenswürdige Sets können mit `fail2ban-ignore` beziehungsweise `fail2ban-admin` markiert oder im Modus `explicit` über genaue `family/table/set`-Identitäten angegeben werden; Firewallregeln werden nicht mehr als Vertrauen interpretiert.
-- Solange die echten Ausnahmen noch nicht feststehen, deaktiviert `fail2ban_whitelist_safety_checks_enabled: false` die neuen Marker-, Set-, IP/CIDR- und SSH-Admin-Preflight-Prüfungen. Der Schalter erzeugt keine Ausnahme und muss nach der Migration wieder aktiviert werden.
-- `ansible.utils.ipaddr` sowie `netaddr` werden nur für die aktivierten semantischen Whitelist-Prüfungen benötigt.
+- Der frühere nftables-Whitelist-Import ist durch die Änderung im aktuellen `Unreleased`-Stand nicht mehr aktiv. Neue Installationen setzen Ausnahmen explizit per Inventory; optional kann die Rolle daraus eine eigene nftables-Fragmentdatei rendern, ohne bestehende Sets einzulesen.
 
 ### Added
 
-- Sichere, comment-basierte Trennung zwischen allgemeinen Monitoring-Ausnahmen und SSH-Admin-Quellen.
-- Reine Ansible-Vertragstests für nftables-Set-Auswahl sowie gültige und ungültige IPv4-/IPv6-Werte.
 - Reine Ansible-Regex-Matrix mit 19 exakten Attack-, Clean- und Ignore-Prüfungen.
 - GitHub-Actions-Workflow für ansible-core 2.12.10, ansible-core 2.21.2 und das Production-Profil von `ansible-lint`.
 - MIT-Lizenzdatei und neutrale Beispielinventare.

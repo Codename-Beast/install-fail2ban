@@ -1,0 +1,47 @@
+# Managed by Ansible role install-fail2ban.
+# Optional allow sets built only from explicit inventory variables.
+# Existing nftables sets are not read or imported by this role.
+{% set admin_entries = (fail2ban_admin_ips | default([]) + fail2ban_trusted_ips | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
+{% set allowed_entries = (fail2ban_allowed_ips | default([])) | map('string') | map('trim') | reject('equalto', '') | unique | list %}
+{% set admin_v4 = admin_entries | reject('search', ':') | list %}
+{% set admin_v6 = admin_entries | select('search', ':') | list %}
+{% set allowed_v4 = allowed_entries | reject('search', ':') | list %}
+{% set allowed_v6 = allowed_entries | select('search', ':') | list %}
+
+table {{ fail2ban_nft_allow_table_family }} {{ fail2ban_nft_allow_table_name }} {
+    set {{ fail2ban_nft_allow_admin_set_v4 }} {
+        type ipv4_addr
+        flags interval
+        comment "install-fail2ban admin IPv4"
+{% if admin_v4 | length > 0 %}
+        elements = { {{ admin_v4 | join(', ') }} }
+{% endif %}
+    }
+
+    set {{ fail2ban_nft_allow_admin_set_v6 }} {
+        type ipv6_addr
+        flags interval
+        comment "install-fail2ban admin IPv6"
+{% if admin_v6 | length > 0 %}
+        elements = { {{ admin_v6 | join(', ') }} }
+{% endif %}
+    }
+
+    set {{ fail2ban_nft_allow_allowed_set_v4 }} {
+        type ipv4_addr
+        flags interval
+        comment "install-fail2ban allowed IPv4"
+{% if allowed_v4 | length > 0 %}
+        elements = { {{ allowed_v4 | join(', ') }} }
+{% endif %}
+    }
+
+    set {{ fail2ban_nft_allow_allowed_set_v6 }} {
+        type ipv6_addr
+        flags interval
+        comment "install-fail2ban allowed IPv6"
+{% if allowed_v6 | length > 0 %}
+        elements = { {{ allowed_v6 | join(', ') }} }
+{% endif %}
+    }
+}

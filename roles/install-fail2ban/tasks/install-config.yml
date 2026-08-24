@@ -173,6 +173,57 @@
     - /etc/fail2ban/filter.d
     - /etc/fail2ban/jail.d
 
+# Optional: write a separate nftables fragment from explicit admin/allowed IPs.
+# Default is off. Existing files are not overwritten unless explicitly allowed.
+- name: "Nftables | create allow-set directory"
+  file:
+    path: "{{ fail2ban_nft_allow_sets_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: fail2ban_nft_allow_sets_enabled | bool
+
+- name: "Nftables | check allow-set file"
+  stat:
+    path: "{{ fail2ban_nft_allow_sets_file }}"
+  register: fail2ban_nft_allow_sets_file_stat
+  when: fail2ban_nft_allow_sets_enabled | bool
+
+- name: "Nftables | protect existing allow-set file"
+  fail:
+    msg: >-
+      {{ fail2ban_nft_allow_sets_file }} already exists. The role will not overwrite
+      nftables content unless fail2ban_nft_allow_sets_overwrite is true.
+  when:
+    - fail2ban_nft_allow_sets_enabled | bool
+    - fail2ban_nft_allow_sets_file_stat.stat.exists | default(false)
+    - not (fail2ban_nft_allow_sets_overwrite | bool)
+
+- name: "Nftables | render allow-set file"
+  template:
+    src: fail2ban-allowsets.nft.j2
+    dest: "{{ fail2ban_nft_allow_sets_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ fail2ban_nft_allow_sets_overwrite | bool }}"
+    validate: "{{ fail2ban_nft_command }} -c -f %s"
+  register: fail2ban_nft_allow_sets_config
+  when: fail2ban_nft_allow_sets_enabled | bool
+
+- name: "Nftables | apply allow-set file"
+  command:
+    argv:
+      - "{{ fail2ban_nft_command }}"
+      - -f
+      - "{{ fail2ban_nft_allow_sets_file }}"
+  changed_when: true
+  when:
+    - fail2ban_nft_allow_sets_enabled | bool
+    - fail2ban_nft_allow_sets_apply | bool
+    - fail2ban_nft_allow_sets_config.changed | default(false)
+
 # recidive reads Fail2Ban's own log. On a fresh install the service has not run
 # yet, so the file must exist before fail2ban-client validates the jails.
 - name: "Config | prepare recidive log"
@@ -239,6 +290,7 @@
     - moodle-badbots.conf
     - moodle-webservice-abuse.conf
     - moodle-password-reset-abuse.conf
+    - moodle-form-abuse.conf
     - moodle-behat-access.conf
     - apache-scanburst.conf
   register: fail2ban_static_filter_config

@@ -20,14 +20,6 @@
     that: "ansible_version.full is version('2.12.10', '>=')"
     fail_msg: "install-fail2ban requires ansible-core >= 2.12.10 (found: {{ ansible_version.full }})"
 
-- name: "Preflight | warn about disabled whitelist safety checks"
-  debug:
-    msg: >-
-      WARNING: whitelist safety checks are disabled for migration. No admin exemption
-      is created automatically, and the active SSH jail can still ban your source IP.
-      Re-enable fail2ban_whitelist_safety_checks_enabled after defining trusted sources.
-  when: not (fail2ban_whitelist_safety_checks_enabled | bool)
-
 - name: "Preflight | find nft binary"
   stat:
     path: "{{ item }}"
@@ -44,7 +36,7 @@
       Abort: nftables/nft is missing on the target host. This role does not install nftables automatically.
       Prepare nftables and run the role again.
   when:
-    - (fail2ban_require_nftables | bool) or (fail2ban_nft_whitelist_import_enabled | bool)
+    - fail2ban_require_nftables | bool or fail2ban_nft_allow_sets_enabled | bool
     - not (fail2ban_nft_command_stats.results | selectattr('stat.exists') | list | length > 0)
 
 - name: "Preflight | select nft binary"
@@ -58,35 +50,6 @@
       }}
   when: fail2ban_nft_command_stats.results | selectattr('stat.exists') | list | length > 0
 
-- name: "Preflight | validate nft whitelist discovery mode"
-  assert:
-    that:
-      - fail2ban_nft_whitelist_discovery_mode in ['comment', 'explicit']
-      - >-
-        fail2ban_nft_whitelist_discovery_mode != 'comment'
-        or (fail2ban_nft_whitelist_comment_markers | map('string') | map('trim') | reject('equalto', '') | list | length > 0)
-      - >-
-        fail2ban_nft_whitelist_discovery_mode != 'comment'
-        or not (fail2ban_sshd_enabled | bool)
-        or (fail2ban_nft_admin_comment_markers | map('string') | map('trim') | reject('equalto', '') | list | length > 0)
-      - >-
-        fail2ban_nft_whitelist_discovery_mode != 'explicit'
-        or ((fail2ban_nft_whitelist_explicit_set_keys + fail2ban_nft_admin_explicit_set_keys) | length > 0)
-      - >-
-        fail2ban_nft_whitelist_discovery_mode != 'explicit'
-        or (
-          (fail2ban_nft_whitelist_explicit_set_keys + fail2ban_nft_admin_explicit_set_keys)
-          | reject('match', '^(ip|ip6|inet|arp|bridge|netdev)/[^/]+/[^/]+$')
-          | list
-          | length == 0
-        )
-    fail_msg: >-
-      Invalid nftables whitelist discovery settings. Use mode 'comment' (recommended)
-      with non-empty trust markers, or 'explicit' with exact family/table/set identities.
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
 - name: "Preflight | detect enabled Apache jails"
   set_fact:
     # Every new Apache access/error-log jail must be added here. Otherwise an
@@ -97,6 +60,7 @@
         or (fail2ban_moodle_badbots_enabled | bool)
         or (fail2ban_moodle_webservice_abuse_enabled | bool)
         or (fail2ban_moodle_password_reset_abuse_enabled | bool)
+        or (fail2ban_moodle_form_abuse_enabled | bool)
         or (fail2ban_moodle_behat_access_enabled | bool)
         or (fail2ban_scanner_useragents_enabled | bool)
         or (fail2ban_unusual_useragents_enabled | bool)
@@ -127,211 +91,8 @@
     - fail2ban_apache_jails_enabled | bool
     - not (fail2ban_apache_log_dir_stat.stat.exists | default(false))
 
-# nftables wird nur gelesen. Importiert werden später nur explizit vertraute Adress-Sets.
-- name: "Preflight | read nft ruleset"
-  command:
-    argv:
-      - "{{ fail2ban_nft_command }}"
-      - -j
-      - list
-      - ruleset
-  register: fail2ban_nft_ruleset_command
-  changed_when: false
-  when: fail2ban_nft_whitelist_import_enabled | bool
-
-- name: "Preflight | extract nft sets"
-  set_fact:
-    fail2ban_nft_all_sets: >-
-      {{
-        ((fail2ban_nft_ruleset_command.stdout | from_json).nftables | default([]))
-        | selectattr('set', 'defined')
-        | map(attribute='set')
-        | list
-      }}
-  when: fail2ban_nft_whitelist_import_enabled | bool
-
-- name: "Preflight | select trusted nft sets"
-  include_tasks: nft-select-sets.yml
-  when: fail2ban_nft_whitelist_import_enabled | bool
-
-- name: "Preflight | validate nft whitelist set types"
-  assert:
-    that:
-      - item.type | default('') in ['ipv4_addr', 'ipv6_addr']
-    fail_msg: >-
-      nftables set {{ item.family }}/{{ item.table }}/{{ item.name }} has unsupported type
-      '{{ item.type | default('missing') }}'; only IPv4/IPv6 address sets may be whitelisted.
-  loop: "{{ fail2ban_nft_whitelist_sets | default([]) }}"
-  loop_control:
-    label: "{{ item.family }}/{{ item.table }}/{{ item.name }}"
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-- name: "Preflight | require nft whitelist set"
-  assert:
-    that:
-      - fail2ban_nft_whitelist_sets | length > 0
-    fail_msg: >-
-      No trusted nftables IPv4/IPv6 set matched discovery mode
-      '{{ fail2ban_nft_whitelist_discovery_mode }}'. In the recommended 'comment' mode,
-      mark trusted sets with one of fail2ban_nft_whitelist_comment_markers or
-      fail2ban_nft_admin_comment_markers. Use 'explicit' with exact
-      family/table/set identities when comments cannot be added.
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_nft_whitelist_require_match | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-- name: "Preflight | initialize nft whitelist import"
-  set_fact:
-    fail2ban_nft_whitelist_import_lines: []
-    fail2ban_nft_admin_whitelist_import_lines: []
-  when: fail2ban_nft_whitelist_import_enabled | bool
-
-# Nur plain IPs und CIDR-Präfixe sind erlaubt; Ranges/Maps bleiben bewusst draußen.
-- name: "Preflight | validate nft whitelist element structure"
-  assert:
-    that:
-      - >-
-        (item.1 is string)
-        or
-        (item.1 is mapping and item.1.prefix is defined and
-         item.1.prefix.addr is defined and item.1.prefix.len is defined)
-    fail_msg: >-
-      nftables set {{ item.0.family }}/{{ item.0.table }}/{{ item.0.name }} contains an unsupported
-      element: {{ item.1 }}. Use plain IP addresses or CIDR prefixes only.
-  loop: "{{ (fail2ban_nft_whitelist_sets | default([])) | subelements('elem', skip_missing=True) }}"
-  loop_control:
-    label: "{{ item.0.name }}:{{ item.1 }}"
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-- name: "Preflight | import nft string elements"
-  set_fact:
-    fail2ban_nft_whitelist_import_lines: >-
-      {{ (fail2ban_nft_whitelist_import_lines + [item.1]) | unique | list }}
-  loop: "{{ (fail2ban_nft_whitelist_sets | default([])) | subelements('elem', skip_missing=True) }}"
-  loop_control:
-    label: "{{ item.0.name }}:{{ item.1 }}"
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - item.1 is string
-
-- name: "Preflight | import nft prefix elements"
-  set_fact:
-    fail2ban_nft_whitelist_import_lines: >-
-      {{ (fail2ban_nft_whitelist_import_lines + [fail2ban_nft_prefix_cidr]) | unique | list }}
-  loop: "{{ (fail2ban_nft_whitelist_sets | default([])) | subelements('elem', skip_missing=True) }}"
-  loop_control:
-    label: "{{ item.0.name }}:{{ fail2ban_nft_prefix_cidr | default('skip') }}"
-  vars:
-    fail2ban_nft_prefix_cidr: >-
-      {{
-        ((item.1.prefix.addr | string) ~ '/' ~ (item.1.prefix.len | string))
-        if (item.1 is mapping and item.1.prefix is defined and item.1.prefix.addr is defined and item.1.prefix.len is defined)
-        else ''
-      }}
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - item.1 is mapping
-    - item.1.prefix is defined
-    - item.1.prefix.addr is defined
-    - item.1.prefix.len is defined
-
-- name: "Preflight | import nft admin string elements"
-  set_fact:
-    fail2ban_nft_admin_whitelist_import_lines: >-
-      {{ (fail2ban_nft_admin_whitelist_import_lines + [item.1]) | unique | list }}
-  loop: "{{ (fail2ban_nft_admin_whitelist_sets | default([])) | subelements('elem', skip_missing=True) }}"
-  loop_control:
-    label: "{{ item.0.name }}:{{ item.1 }}"
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - item.1 is string
-
-- name: "Preflight | import nft admin prefix elements"
-  set_fact:
-    fail2ban_nft_admin_whitelist_import_lines: >-
-      {{ (fail2ban_nft_admin_whitelist_import_lines + [fail2ban_nft_prefix_cidr]) | unique | list }}
-  loop: "{{ (fail2ban_nft_admin_whitelist_sets | default([])) | subelements('elem', skip_missing=True) }}"
-  loop_control:
-    label: "{{ item.0.name }}:{{ fail2ban_nft_prefix_cidr | default('skip') }}"
-  vars:
-    fail2ban_nft_prefix_cidr: >-
-      {{
-        ((item.1.prefix.addr | string) ~ '/' ~ (item.1.prefix.len | string))
-        if (item.1 is mapping and item.1.prefix is defined and item.1.prefix.addr is defined and item.1.prefix.len is defined)
-        else ''
-      }}
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - item.1 is mapping
-    - item.1.prefix is defined
-
-- name: "Preflight | validate imported nft addresses"
-  assert:
-    that:
-      - (item | string | trim | length > 0) and ((item | ansible.utils.ipaddr) != false)
-    fail_msg: "install-fail2ban: invalid nftables whitelist entry '{{ item }}'."
-  loop: "{{ fail2ban_nft_whitelist_import_lines }}"
-  loop_control:
-    label: "{{ item }}"
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-- name: "Preflight | require nft whitelist addresses"
-  assert:
-    that:
-      - fail2ban_nft_whitelist_import_lines | length > 0
-    fail_msg: >-
-      The configured nftables whitelist sets contain no supported IP or CIDR elements.
-      Use plain IPv4/IPv6 addresses or prefixes in the trusted sets.
-  when:
-    - fail2ban_nft_whitelist_import_enabled | bool
-    - fail2ban_nft_whitelist_require_match | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-- name: "Preflight | build trusted whitelist"
-  set_fact:
-    fail2ban_effective_trusted_ips: >-
-      {{
-        (
-          (fail2ban_trusted_ips | default([]))
-          + (fail2ban_allowed_ips | default([]))
-          + (fail2ban_nft_whitelist_import_lines | default([]))
-        ) | unique | list
-      }}
-
-- name: "Preflight | build admin whitelist"
-  set_fact:
-    fail2ban_effective_admin_ips: >-
-      {{
-        (
-          (fail2ban_trusted_ips | default([]))
-          + (fail2ban_nft_admin_whitelist_import_lines | default([]))
-        ) | unique | list
-      }}
-
-# SSH braucht eine echte Admin-Quelle. Monitoring reicht nicht als Lockout-Schutz.
-- name: "Preflight | require trusted SSH admin whitelist"
-  assert:
-    that:
-      - fail2ban_effective_admin_ips | length > 0
-    fail_msg: >-
-      sshd is enabled but no admin/VPN/jump-host IP was imported or configured.
-      A monitoring-only whitelist does not satisfy the SSH lockout guard.
-      In comment mode, mark the admin set with one of fail2ban_nft_admin_comment_markers.
-      In explicit mode, list its exact identity in fail2ban_nft_admin_explicit_set_keys;
-      otherwise configure fail2ban_trusted_ips explicitly.
-  when:
-    - fail2ban_sshd_enabled | bool
-    - fail2ban_require_trusted_whitelist_for_sshd | bool
-    - fail2ban_whitelist_safety_checks_enabled | bool
-
-# Finale ignoreip-Liste: Loopback + explizite IPs + sauber importierte nftables-Quellen.
+# Only explicit variables feed ignoreip. The role no longer reads nftables sets
+# as whitelist input; that proved too fragile across customer firewalls.
 - name: "Preflight | build effective whitelist"
   set_fact:
     fail2ban_effective_ignoreip: >-
@@ -339,16 +100,8 @@
         (
           (fail2ban_base_ignoreip | default([]))
           + (fail2ban_ignoreip | default([]))
-          + fail2ban_effective_trusted_ips
+          + (fail2ban_trusted_ips | default([]))
+          + (fail2ban_admin_ips | default([]))
+          + (fail2ban_allowed_ips | default([]))
         ) | unique | list
       }}
-
-- name: "Preflight | validate effective whitelist"
-  assert:
-    that:
-      - (item | string | trim | length > 0) and ((item | ansible.utils.ipaddr) != false)
-    fail_msg: "install-fail2ban: invalid final whitelist entry '{{ item }}'."
-  loop: "{{ fail2ban_effective_ignoreip }}"
-  loop_control:
-    label: "{{ item }}"
-  when: fail2ban_whitelist_safety_checks_enabled | bool

@@ -6,42 +6,6 @@
   vars_files:
     - ../roles/install-fail2ban/defaults/main.yml
   vars:
-    fail2ban_nft_all_sets:
-      - family: inet
-        table: filter
-        name: monitoring
-        type: ipv4_addr
-        comment: fail2ban-ignore
-        elem: [192.0.2.10]
-      - family: inet
-        table: filter
-        name: administrators
-        type: ipv4_addr
-        comment: fail2ban-admin
-        elem: [198.51.100.20]
-      - family: inet
-        table: filter
-        name: public-service
-        type: ipv4_addr
-        comment: public-web-sources
-        elem: [203.0.113.0/24]
-    valid_ip_values:
-      - 127.0.0.1
-      - 192.0.2.0/24
-      - 2001:db8::1
-      - 2001:db8::/48
-      - ::1
-    invalid_ip_values:
-      - 999.1.1.1
-      - 192.0.2.1/99
-      - 2001:db8::/129
-      - 2001:::1
-      - not-an-ip
-    migration_inventory: >-
-      {{
-        lookup('file', playbook_dir + '/../inventory/group_vars/fail2ban_targets.yml')
-        | from_yaml
-      }}
     preflight_tasks: >-
       {{
         lookup('file', playbook_dir + '/../roles/install-fail2ban/tasks/preflight.yml')
@@ -54,51 +18,64 @@
       }}
     fail2ban_daemon_config: >-
       {{ lookup('file', playbook_dir + '/../roles/install-fail2ban/files/99-web-protection.local') }}
-    safety_check_task_names:
-      - "Preflight | validate nft whitelist discovery mode"
-      - "Preflight | validate nft whitelist set types"
-      - "Preflight | require nft whitelist set"
-      - "Preflight | validate nft whitelist element structure"
-      - "Preflight | validate imported nft addresses"
-      - "Preflight | require nft whitelist addresses"
-      - "Preflight | require trusted SSH admin whitelist"
-      - "Preflight | validate effective whitelist"
+    defaults_text: >-
+      {{ lookup('file', playbook_dir + '/../roles/install-fail2ban/defaults/main.yml') }}
+    preflight_text: >-
+      {{ lookup('file', playbook_dir + '/../roles/install-fail2ban/tasks/preflight.yml') }}
   tasks:
-    - name: "Test | require configurable whitelist safety checks"
+    - name: "Test | require no nftables whitelist import"
       assert:
         that:
-          - fail2ban_whitelist_safety_checks_enabled is defined
-          - fail2ban_whitelist_safety_checks_enabled | type_debug == 'bool'
-          - fail2ban_whitelist_safety_checks_enabled | bool
+          - "'nft_whitelist' not in defaults_text"
+          - "'nft_whitelist' not in preflight_text"
+          - "'nft ruleset' not in preflight_text"
+          - "'nft -j list ruleset' not in preflight_text"
 
-    - name: "Test | require migration inventory override"
+    - name: "Test | require explicit whitelist build"
       assert:
         that:
-          - migration_inventory.fail2ban_whitelist_safety_checks_enabled is defined
-          - not (migration_inventory.fail2ban_whitelist_safety_checks_enabled | bool)
-
-    - name: "Test | require every whitelist safety task to honor the switch"
-      assert:
-        that:
-          - matching_preflight_tasks | length == 1
-          - "'fail2ban_whitelist_safety_checks_enabled' in (matching_preflight_tasks[0].when | string)"
+          - effective_whitelist_tasks | length == 1
+          - "'fail2ban_base_ignoreip' in (effective_whitelist_tasks[0] | string)"
+          - "'fail2ban_ignoreip' in (effective_whitelist_tasks[0] | string)"
+          - "'fail2ban_trusted_ips' in (effective_whitelist_tasks[0] | string)"
+          - "'fail2ban_admin_ips' in (effective_whitelist_tasks[0] | string)"
+          - "'fail2ban_allowed_ips' in (effective_whitelist_tasks[0] | string)"
       vars:
-        matching_preflight_tasks: >-
-          {{ preflight_tasks | selectattr('name', 'equalto', item) | list }}
-      loop: "{{ safety_check_task_names }}"
-      loop_control:
-        label: "{{ item }}"
-
-    - name: "Test | require visible migration warning"
-      assert:
-        that:
-          - migration_warning_tasks | length == 1
-          - "'fail2ban_whitelist_safety_checks_enabled' in (migration_warning_tasks[0].when | string)"
-      vars:
-        migration_warning_tasks: >-
+        effective_whitelist_tasks: >-
           {{
             preflight_tasks
-            | selectattr('name', 'equalto', 'Preflight | warn about disabled whitelist safety checks')
+            | selectattr('name', 'equalto', 'Preflight | build effective whitelist')
+            | list
+          }}
+
+    - name: "Test | require optional nftables allow-set protection"
+      assert:
+        that:
+          - nft_allow_render_tasks | length == 1
+          - nft_allow_render_tasks[0]['template']['src'] == 'fail2ban-allowsets.nft.j2'
+          - "'fail2ban_nft_allow_sets_overwrite' in (nft_allow_render_tasks[0]['template']['force'] | string)"
+          - "'-c -f %s' in nft_allow_render_tasks[0]['template']['validate']"
+          - nft_allow_protect_tasks | length == 1
+          - "'fail2ban_nft_allow_sets_overwrite' in (nft_allow_protect_tasks[0].when | string)"
+          - nft_allow_apply_tasks | length == 1
+          - "'fail2ban_nft_allow_sets_apply' in (nft_allow_apply_tasks[0].when | string)"
+      vars:
+        nft_allow_render_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Nftables | render allow-set file')
+            | list
+          }}
+        nft_allow_protect_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Nftables | protect existing allow-set file')
+            | list
+          }}
+        nft_allow_apply_tasks: >-
+          {{
+            install_config_tasks
+            | selectattr('name', 'equalto', 'Nftables | apply allow-set file')
             | list
           }}
 
@@ -176,46 +153,3 @@
             | selectattr('name', 'equalto', 'Setup | restore existing service policy')
             | list
           }}
-
-    - name: "Test | select comment-marked nft sets"
-      include_role:
-        name: install-fail2ban
-        tasks_from: nft-select-sets.yml
-      vars:
-        fail2ban_nft_whitelist_discovery_mode: comment
-
-    - name: "Test | verify comment-driven trust separation"
-      assert:
-        that:
-          - fail2ban_nft_whitelist_sets | map(attribute='name') | list == ['monitoring', 'administrators']
-          - fail2ban_nft_admin_whitelist_sets | map(attribute='name') | list == ['administrators']
-          - "'public-service' not in (fail2ban_nft_whitelist_sets | map(attribute='name') | list)"
-
-    - name: "Test | select explicit nft set identities"
-      include_role:
-        name: install-fail2ban
-        tasks_from: nft-select-sets.yml
-      vars:
-        fail2ban_nft_whitelist_discovery_mode: explicit
-        fail2ban_nft_whitelist_explicit_set_keys:
-          - inet/filter/public-service
-        fail2ban_nft_admin_explicit_set_keys:
-          - inet/filter/administrators
-
-    - name: "Test | verify exact explicit set selection"
-      assert:
-        that:
-          - fail2ban_nft_whitelist_sets | map(attribute='name') | list == ['administrators', 'public-service']
-          - fail2ban_nft_admin_whitelist_sets | map(attribute='name') | list == ['administrators']
-
-    - name: "Test | accept valid IP and CIDR values"
-      assert:
-        that:
-          - (item | ansible.utils.ipaddr) != false
-      loop: "{{ valid_ip_values }}"
-
-    - name: "Test | reject invalid IP and CIDR values"
-      assert:
-        that:
-          - (item | ansible.utils.ipaddr) == false
-      loop: "{{ invalid_ip_values }}"
